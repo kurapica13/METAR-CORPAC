@@ -1,7 +1,12 @@
 """
-METAR DIGITAL WEB - VERSIÓN CORPAC PERÚ
-100% IGUAL al programa original de escritorio
-Incluye: Humedad Relativa % y Excel con ancho automático
+METAR DIGITAL WEB - VERSIÓN PROFESIONAL CORPAC PERÚ
+Características:
+✅ Viento con reglas circulares (340V080)
+✅ Visibilidad mínima con cuadrantes (N, NE, E, SE, S, SW, W, NW)
+✅ RVR (Runway Visual Range)
+✅ Estándar oficial nubes CORPAC (30m/1000m)
+✅ Fenómenos especiales (PRFG, VCFG, BCFG, MIFG)
+✅ Excel con formato profesional
 """
 
 import streamlit as st
@@ -25,7 +30,88 @@ st.set_page_config(
 )
 
 # ============================================
-# INICIALIZAR ESTADO DE SESIÓN (VACÍO AL INICIAR)
+# ESTILOS CSS PERSONALIZADOS
+# ============================================
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #f0f0f0;
+    }
+    
+    .metar-header {
+        background: linear-gradient(90deg, #0b3d91 0%, #1a4fa0 100%);
+        padding: 1.5rem;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .panel {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    
+    .section-title {
+        color: #0b3d91;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #e8eef7;
+        padding-bottom: 0.5rem;
+    }
+    
+    .metar-box {
+        background: #1e1e1e;
+        color: #00ff00;
+        padding: 1rem;
+        border-radius: 5px;
+        font-family: 'Courier New', monospace;
+        font-size: 1.1rem;
+        border-left: 5px solid #0b3d91;
+    }
+    
+    .historial-item {
+        background: #f8f9fa;
+        padding: 0.8rem;
+        border-radius: 5px;
+        margin-bottom: 0.5rem;
+        font-family: 'Courier New', monospace;
+        border-left: 3px solid #0b3d91;
+    }
+    
+    .historial-item-speci {
+        background: #FFE699;
+        border-left: 3px solid #FFC000;
+    }
+    
+    .badge-speci {
+        background: #FFE699;
+        color: #000;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        margin-left: 10px;
+    }
+    
+    .stButton button {
+        width: 100%;
+        border-radius: 5px;
+        font-weight: 600;
+    }
+    
+    .stTextInput input, .stSelectbox select {
+        border-radius: 5px;
+        border: 1px solid #ddd;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================
+# INICIALIZAR ESTADO DE SESIÓN
 # ============================================
 if 'registros' not in st.session_state:
     st.session_state.registros = []
@@ -49,6 +135,7 @@ def limpiar_campos():
     st.session_state.var_viento = ""
     st.session_state.vis = ""
     st.session_state.vis_min = ""
+    st.session_state.rvr = ""
     st.session_state.fenomeno = ""
     st.session_state.nubes = ""
     st.session_state.temp = ""
@@ -60,60 +147,26 @@ def limpiar_campos():
     st.session_state.campos_inicializados = True
 
 # ============================================
-# INICIALIZAR CAMPOS VACÍOS (IGUAL AL ORIGINAL)
+# INICIALIZAR CAMPOS VACÍOS
 # ============================================
 if not st.session_state.campos_inicializados:
     limpiar_campos()
 
 # ============================================
-# FUNCIONES DE PROCESAMIENTO - CORPAC PERÚ
+# FUNCIONES DE PROCESAMIENTO - VIENTO
 # ============================================
 
-def validar_hora(hora_str):
-    """Valida formato de hora HHMM"""
-    if len(hora_str) != 4 or not hora_str.isdigit():
-        raise ValueError("Hora debe ser HHMM (4 dígitos)")
-    h = int(hora_str[:2])
-    m = int(hora_str[2:])
-    if h > 23 or m > 59:
-        raise ValueError("Hora inválida")
-    return hora_str
-
-def validar_intensidad_viento(intensidad_str):
-    """Valida formato de intensidad de viento"""
-    intensidad_str = str(intensidad_str).strip().upper()
-    if not intensidad_str:
-        raise ValueError("Intensidad de viento requerida")
-    
-    intensidad_str = intensidad_str.replace(' G ', 'G').replace(' G', 'G').replace('G ', 'G')
-    
-    if 'G' in intensidad_str:
-        partes = intensidad_str.split('G')
-        if len(partes) != 2:
-            raise ValueError("Formato de ráfagas inválido. Use: 15G25")
-        base = int(partes[0])
-        rafaga = int(partes[1])
-        if base < 0 or base > 100:
-            raise ValueError("Intensidad base fuera de rango (0-100)")
-        if rafaga < base:
-            raise ValueError("Ráfaga debe ser mayor o igual a intensidad base")
-        if rafaga > 150:
-            raise ValueError("Ráfaga excede límite (150 KT)")
-        diferencia = rafaga - base
-        if diferencia < 10:
-            raise ValueError(f"Ráfaga requiere diferencia ≥10 KT (actual: {diferencia} KT)")
-        return intensidad_str
-    else:
-        intensidad = int(intensidad_str)
-        if intensidad < 0 or intensidad > 100:
-            raise ValueError("Intensidad fuera de rango (0-100)")
-        return intensidad_str
-
 def procesar_viento(direccion, intensidad, variacion):
-    """Procesa datos de viento a formato METAR"""
+    """
+    PROCESAMIENTO DE VIENTO - REGLAS CORPAC PERÚ
+    Caso 1: Variación ≥60° y <180° con viento <3kt → VRBxxKT
+    Caso 2: Variación ≥60° y <180° con viento ≥3kt → dddffKT bbbVnnn
+    Caso 3: Variación ≥180° → VRBxxKT (sin importar velocidad)
+    """
     dir_int = int(direccion)
     intensidad_str = str(intensidad).upper().strip()
     
+    # Procesar ráfagas
     if 'G' in intensidad_str:
         if 'G' in intensidad_str and not ' ' in intensidad_str.replace('G', ''):
             base_int, gust_int = intensidad_str.split('G')
@@ -129,22 +182,50 @@ def procesar_viento(direccion, intensidad, variacion):
         int_base = int(intensidad_str)
         intensidad_metar = f"{int_base:02d}"
     
+    # Si NO hay variación
     if not variacion:
         return f"{dir_int:03d}{intensidad_metar}KT"
     
     try:
-        desde, hasta = map(int, variacion.upper().split("V"))
-        diferencia = abs(hasta - desde)
-        if diferencia > 180:
+        # Extraer valores de variación (formato: bbbVnnn)
+        variacion = variacion.upper().replace(' ', '')
+        if 'V' not in variacion:
+            return f"{dir_int:03d}{intensidad_metar}KT"
+        
+        desde, hasta = map(int, variacion.split('V'))
+        
+        # Calcular diferencia CIRCULAR (importante para 340V080)
+        diff1 = abs(hasta - desde)
+        diff2 = 360 - diff1
+        diferencia = min(diff1, diff2)
+        
+        # CASO 3: Variación ≥ 180°
+        if diferencia >= 180:
             return f"VRB{intensidad_metar}KT"
-        elif diferencia >= 60:
+        
+        # CASO 1 y 2: Variación ≥ 60° y < 180°
+        if diferencia >= 60:
             if int_base < 3:
+                # CASO 1: Viento < 3kt
                 return f"VRB{intensidad_metar}KT"
             else:
-                return f"{dir_int:03d}{intensidad_metar}KT {variacion.upper()}"
-    except:
-        pass
-    return f"{dir_int:03d}{intensidad_metar}KT"
+                # CASO 2: Viento ≥ 3kt
+                # Formatear para mostrar el rango correcto (siempre de menor a mayor)
+                if diff1 <= 180:
+                    return f"{dir_int:03d}{intensidad_metar}KT {desde:03d}V{hasta:03d}"
+                else:
+                    # Para casos como 340V080, mostrar como 080V340 (menor a mayor)
+                    return f"{dir_int:03d}{intensidad_metar}KT {hasta:03d}V{desde:03d}"
+        
+        # Variación < 60°
+        return f"{dir_int:03d}{intensidad_metar}KT {variacion}"
+        
+    except Exception as e:
+        return f"{dir_int:03d}{intensidad_metar}KT"
+
+# ============================================
+# FUNCIONES DE PROCESAMIENTO - VISIBILIDAD
+# ============================================
 
 def convertir_visibilidad(vis_texto):
     """Convierte visibilidad a metros"""
@@ -164,6 +245,76 @@ def convertir_visibilidad(vis_texto):
     except:
         raise ValueError("Formato de visibilidad inválido")
 
+def procesar_visibilidad_minima(vis_min_texto, vis_m):
+    """
+    Procesa visibilidad mínima con cuadrantes
+    Cuadrantes: N, NE, E, SE, S, SW, W, NW
+    Reglas: 1) <1500m 2) <50% vis reinante y <5000m
+    """
+    if not vis_min_texto:
+        return "", ""
+    
+    vis_min_texto = vis_min_texto.strip().upper()
+    cuadrantes = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    
+    valor = ""
+    cuadrante = ""
+    
+    for c in cuadrantes:
+        if vis_min_texto.endswith(c):
+            valor = vis_min_texto[:-len(c)]
+            cuadrante = c
+            break
+    
+    if not cuadrante:
+        valor = vis_min_texto
+    
+    try:
+        if valor.endswith("KM"):
+            km = float(valor[:-2])
+            vis_min_m = 9999 if km >= 10 else int(km * 1000)
+        elif valor.endswith("M"):
+            vis_min_m = int(valor[:-1])
+        else:
+            vis_min_m = int(valor)
+            vis_min_m = 9999 if vis_min_m >= 10000 else vis_min_m
+        
+        es_valida = False
+        if vis_min_m < 1500:
+            es_valida = True
+        if vis_min_m < (vis_m * 0.5) and vis_min_m < 5000:
+            es_valida = True
+        
+        if not es_valida:
+            return "", "⚠️ No cumple reglas de visibilidad mínima"
+        
+        if cuadrante:
+            return f"{vis_min_m:04d}{cuadrante}", ""
+        else:
+            return f"{vis_min_m:04d}", ""
+        
+    except:
+        return "", "❌ Formato inválido"
+
+def procesar_rvr(rvr_texto):
+    """Procesa RVR (Runway Visual Range)"""
+    if not rvr_texto:
+        return ""
+    
+    rvr_texto = rvr_texto.strip().upper().replace('M', '').replace('RVR', '')
+    
+    try:
+        rvr_valor = int(rvr_texto)
+        if rvr_valor < 50 or rvr_valor > 2000:
+            return ""
+        return f"RVR{rvr_valor:04d}"
+    except:
+        return ""
+
+# ============================================
+# FUNCIONES DE PROCESAMIENTO - FENÓMENOS
+# ============================================
+
 def codificar_fenomenos(texto):
     """CODIFICADOR COMPLETO DE FENÓMENOS - CORPAC"""
     if not texto:
@@ -171,7 +322,6 @@ def codificar_fenomenos(texto):
     
     texto_lower = texto.lower().strip()
     
-    # Casos especiales CORPAC
     if any(x in texto_lower for x in ["niebla parcial", "prfg", "pr fg", "parcial"]):
         return "PRFG"
     if any(x in texto_lower for x in ["niebla en la vecindad", "vcfg", "vc fg", "vecindad"]):
@@ -230,6 +380,10 @@ def codificar_fenomenos(texto):
     
     return " ".join(resultados) if resultados else ""
 
+# ============================================
+# FUNCIONES DE PROCESAMIENTO - NUBES
+# ============================================
+
 def interpretar_nubes(texto, vis_m, fenomeno):
     """CODIFICADOR DE NUBES - ESTÁNDAR CORPAC PERÚ"""
     texto = texto.strip().upper()
@@ -263,7 +417,6 @@ def interpretar_nubes(texto, vis_m, fenomeno):
             
             tipo_nube = tipos_nubes.get(tipo, tipo)
             
-            # ESTÁNDAR CORPAC PERÚ
             if altura <= 3000:
                 if altura % 30 != 0:
                     altura = (altura // 30) * 30
@@ -316,6 +469,50 @@ def verificar_cavok(vis_m, fenomeno, nubes):
     """Verifica condiciones para CAVOK"""
     return (vis_m >= 9999 and not fenomeno.strip() and nubes in ["NSC", "SKC", "CLR"])
 
+# ============================================
+# FUNCIONES DE VALIDACIÓN
+# ============================================
+
+def validar_hora(hora_str):
+    """Valida formato de hora HHMM"""
+    if len(hora_str) != 4 or not hora_str.isdigit():
+        raise ValueError("Hora debe ser HHMM (4 dígitos)")
+    h = int(hora_str[:2])
+    m = int(hora_str[2:])
+    if h > 23 or m > 59:
+        raise ValueError("Hora inválida")
+    return hora_str
+
+def validar_intensidad_viento(intensidad_str):
+    """Valida formato de intensidad de viento"""
+    intensidad_str = str(intensidad_str).strip().upper()
+    if not intensidad_str:
+        raise ValueError("Intensidad de viento requerida")
+    
+    intensidad_str = intensidad_str.replace(' G ', 'G').replace(' G', 'G').replace('G ', 'G')
+    
+    if 'G' in intensidad_str:
+        partes = intensidad_str.split('G')
+        if len(partes) != 2:
+            raise ValueError("Formato de ráfagas inválido. Use: 15G25")
+        base = int(partes[0])
+        rafaga = int(partes[1])
+        if base < 0 or base > 100:
+            raise ValueError("Intensidad base fuera de rango (0-100)")
+        if rafaga < base:
+            raise ValueError("Ráfaga debe ser mayor o igual a intensidad base")
+        if rafaga > 150:
+            raise ValueError("Ráfaga excede límite (150 KT)")
+        diferencia = rafaga - base
+        if diferencia < 10:
+            raise ValueError(f"Ráfaga requiere diferencia ≥10 KT (actual: {diferencia} KT)")
+        return intensidad_str
+    else:
+        intensidad = int(intensidad_str)
+        if intensidad < 0 or intensidad > 100:
+            raise ValueError("Intensidad fuera de rango (0-100)")
+        return intensidad_str
+
 def validar_numero(valor, min_val, max_val, nombre):
     """Valida un número dentro de un rango"""
     if not valor:
@@ -337,7 +534,7 @@ def validar_temp_rocio(temp, rocio):
 def validar_humedad(hr):
     """Valida humedad relativa"""
     if not hr:
-        return ""  # Opcional
+        return ""
     try:
         num = float(hr)
         if num < 0 or num > 100:
@@ -345,6 +542,10 @@ def validar_humedad(hr):
         return num
     except:
         raise ValueError("Humedad inválida")
+
+# ============================================
+# FUNCIÓN PRINCIPAL DE GENERACIÓN
+# ============================================
 
 def generar_metar(datos):
     """Genera código METAR desde los datos del formulario"""
@@ -367,15 +568,15 @@ def generar_metar(datos):
         # Procesar visibilidad
         vis_m = convertir_visibilidad(datos['vis'])
         
-        # Visibilidad mínima
-        vis_min = ""
+        # Procesar visibilidad mínima con cuadrante
+        vis_min_codigo = ""
         if datos['vis_min']:
-            try:
-                vis_min_m = convertir_visibilidad(datos['vis_min'])
-                if vis_min_m < vis_m:
-                    vis_min = f"{vis_min_m:04d}"
-            except:
-                pass
+            vis_min_codigo, vis_min_error = procesar_visibilidad_minima(datos['vis_min'], vis_m)
+            if vis_min_error:
+                raise ValueError(vis_min_error)
+        
+        # Procesar RVR
+        rvr_codigo = procesar_rvr(datos['rvr'])
         
         # Procesar fenómenos y nubes
         fenomeno = codificar_fenomenos(datos['fenomeno'])
@@ -386,10 +587,8 @@ def generar_metar(datos):
         rocio = validar_numero(datos['rocio'], -10, 40, "Punto de rocío")
         validar_temp_rocio(temp, rocio)
         
-        # Validar humedad (opcional)
-        hr = ""
-        if datos['hr']:
-            hr = validar_humedad(datos['hr'])
+        # Validar humedad
+        hr = validar_humedad(datos['hr'])
         
         # Validar QNH
         qnh = validar_numero(datos['qnh'], 850, 1100, "QNH")
@@ -404,8 +603,10 @@ def generar_metar(datos):
             metar_parts.append("CAVOK")
         else:
             metar_parts.append(f"{vis_m:04d}")
-            if vis_min:
-                metar_parts.append(vis_min)
+            if vis_min_codigo:
+                metar_parts.append(vis_min_codigo)
+            if rvr_codigo:
+                metar_parts.append(rvr_codigo)
             if fenomeno:
                 metar_parts.append(fenomeno)
             metar_parts.append(nubes)
@@ -417,7 +618,7 @@ def generar_metar(datos):
         
         metar_completo = " ".join(metar_parts) + "="
         
-        # Crear registro completo (IGUAL AL ORIGINAL)
+        # Crear registro completo
         registro = {
             'Día': datos['dia'],
             'Hora': hora,
@@ -427,7 +628,8 @@ def generar_metar(datos):
             'Variación_Viento': datos['var_viento'],
             'Visibilidad_Original': datos['vis'],
             'Visibilidad_Metros': vis_m,
-            'Visibilidad_Mínima': vis_min,
+            'Visibilidad_Mínima': vis_min_codigo,
+            'RVR': rvr_codigo,
             'Fenómeno_Texto': datos['fenomeno'],
             'Fenómeno_Código': fenomeno,
             'Nubes_Texto': datos['nubes'],
@@ -454,59 +656,52 @@ def generar_metar(datos):
         }
 
 # ============================================
-# FUNCIÓN PARA EXPORTAR EXCEL (CON ANCHO AUTOMÁTICO)
+# FUNCIÓN PARA EXPORTAR EXCEL
 # ============================================
+
 def exportar_a_excel(registros):
-    """Exporta registros a Excel con formato profesional y ancho automático"""
+    """Exporta registros a Excel con formato profesional"""
     if not registros:
         return None, "No hay registros para exportar"
     
     try:
-        # Crear DataFrame
         df = pd.DataFrame(registros)
         
-        # Reordenar columnas como el original
         columnas = [
             'Día', 'Hora', 'Tipo', 'Dirección_Viento', 'Intensidad_Viento',
             'Variación_Viento', 'Visibilidad_Original', 'Visibilidad_Metros',
-            'Visibilidad_Mínima', 'Fenómeno_Texto', 'Fenómeno_Código',
+            'Visibilidad_Mínima', 'RVR', 'Fenómeno_Texto', 'Fenómeno_Código',
             'Nubes_Texto', 'Nubes_Código', 'Temperatura', 'Punto_Rocío',
             'Humedad_Relativa_%', 'QNH', 'Presión_Estación',
             'Info_Suplementaria', 'METAR_Completo'
         ]
         
-        # Asegurar que todas las columnas existan
         for col in columnas:
             if col not in df.columns:
                 df[col] = ""
         
         df = df[columnas]
-        
-        # Formatear Día y Hora
         df['Día'] = df['Día'].astype(str).str.zfill(2)
         df['Hora'] = df['Hora'].astype(str).str.zfill(4)
         
-        # Crear archivo Excel en memoria
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='METAR', index=False)
             
-            # Obtener el workbook y worksheet
             workbook = writer.book
             worksheet = writer.sheets['METAR']
             
-            # ===== ANCHO AUTOMÁTICO DE COLUMNAS =====
             from openpyxl.utils import get_column_letter
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
             
+            # Ancho automático de columnas
             for col in range(1, len(columnas) + 1):
                 column_letter = get_column_letter(col)
                 max_length = 0
                 
-                # Revisar encabezado
                 header_cell = worksheet.cell(row=1, column=col)
                 max_length = len(str(header_cell.value)) if header_cell.value else 0
                 
-                # Revisar datos (primeras 100 filas para rendimiento)
                 for row in range(2, min(len(df) + 2, 102)):
                     cell = worksheet.cell(row=row, column=col)
                     if cell.value:
@@ -514,22 +709,17 @@ def exportar_a_excel(registros):
                         if cell_length > max_length:
                             max_length = cell_length
                 
-                # Limitar ancho máximo y mínimo
-                adjusted_width = min(max_length + 2, 70)  # Máximo 70
-                adjusted_width = max(adjusted_width, 8)    # Mínimo 8
+                adjusted_width = min(max_length + 2, 70)
+                adjusted_width = max(adjusted_width, 8)
                 worksheet.column_dimensions[column_letter].width = adjusted_width
             
-            # ===== FORMATO PROFESIONAL =====
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-            
-            # Colores corporativos
+            # Formato profesional
             COLOR_HEADER = "0B3D91"
             COLOR_HEADER_TEXTO = "FFFFFF"
             COLOR_FILA_IMPAR = "E8EEF7"
             COLOR_BORDE = "CCCCCC"
             COLOR_SPECI = "FFE699"
             
-            # Formato de encabezados
             header_font = Font(name='Calibri', size=11, bold=True, color=COLOR_HEADER_TEXTO)
             header_fill = PatternFill(start_color=COLOR_HEADER, end_color=COLOR_HEADER, fill_type="solid")
             header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -540,7 +730,6 @@ def exportar_a_excel(registros):
                 bottom=Side(style='medium', color=COLOR_HEADER)
             )
             
-            # Aplicar formato a encabezados
             for col in range(1, len(columnas) + 1):
                 cell = worksheet.cell(row=1, column=col)
                 cell.font = header_font
@@ -550,7 +739,6 @@ def exportar_a_excel(registros):
             
             worksheet.row_dimensions[1].height = 30
             
-            # Formato de datos
             border_datos = Border(
                 left=Side(style='thin', color=COLOR_BORDE),
                 right=Side(style='thin', color=COLOR_BORDE),
@@ -563,14 +751,12 @@ def exportar_a_excel(registros):
             alineacion_centrada = Alignment(horizontal='center', vertical='center')
             alineacion_izquierda = Alignment(horizontal='left', vertical='center')
             
-            # Formato para SPECI
             speci_fill = PatternFill(start_color=COLOR_SPECI, end_color=COLOR_SPECI, fill_type="solid")
             speci_font = Font(name='Calibri', size=10, bold=True)
             
-            # Aplicar formato a cada fila
             for row in range(2, len(df) + 2):
                 es_impar = (row % 2 == 1)
-                tipo_reporte = worksheet.cell(row=row, column=3).value  # Columna C
+                tipo_reporte = worksheet.cell(row=row, column=3).value
                 
                 for col in range(1, len(columnas) + 1):
                     cell = worksheet.cell(row=row, column=col)
@@ -584,19 +770,16 @@ def exportar_a_excel(registros):
                         if es_impar:
                             cell.fill = fill_impar
                     
-                    # Alineación
                     col_letter = get_column_letter(col)
-                    if col_letter in ['A', 'B', 'C', 'D', 'E', 'H', 'I', 'M', 'N', 'O', 'P', 'Q']:
+                    if col_letter in ['A', 'B', 'C', 'D', 'E', 'H', 'I', 'J', 'N', 'O', 'P', 'Q', 'R']:
                         cell.alignment = alineacion_centrada
                     else:
                         cell.alignment = alineacion_izquierda
             
-            # Congelar panel
             worksheet.freeze_panes = 'A2'
         
         output.seek(0)
         
-        # Contar SPECI para el mensaje
         speci_count = len([r for r in registros if r.get('Tipo') == 'SPECI'])
         mensaje = f"✅ {len(registros)} registros exportados\n"
         mensaje += f"   📊 METAR: {len(registros) - speci_count}\n"
@@ -649,23 +832,25 @@ with col_izq:
         with col2:
             int_viento = st.text_input("Intensidad (KT)", key='int_viento', help="Nudos. Ráfagas: 15G25")
         with col3:
-            var_viento = st.text_input("Variación", key='var_viento', help="Formato: 200V260")
+            var_viento = st.text_input("Variación", key='var_viento', help="Formato: 340V080")
         
         st.markdown("---")
         
         # VISIBILIDAD
         st.subheader("👁️ VISIBILIDAD")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             vis = st.text_input("Visibilidad", key='vis', help="Ej: 10km, 5000m, 9999")
         with col2:
-            vis_min = st.text_input("Visibilidad Mínima", key='vis_min', help="Opcional")
+            vis_min = st.text_input("Visibilidad Mínima", key='vis_min', help="Ej: 1200SW, 0800NE, 3000N")
+        with col3:
+            rvr = st.text_input("RVR (m)", key='rvr', help="Runway Visual Range - Ej: 0600, 1200")
         
         st.markdown("---")
         
         # FENÓMENOS Y NUBES
         st.subheader("☁️ FENÓMENOS Y NUBES")
-        fenomeno = st.text_input("Fenómeno", key='fenomeno', help="Ej: niebla parcial, lluvia ligera, tormenta")
+        fenomeno = st.text_input("Fenómeno", key='fenomeno', help="Ej: niebla parcial (PRFG), lluvia ligera (-RA)")
         nubes = st.text_input("Nubes", key='nubes', help="Ej: 8 ST 300M, 5 AC 5000M, CB 1500M")
         
         st.markdown("---")
@@ -688,7 +873,7 @@ with col_izq:
         
         # INFORMACIÓN SUPLEMENTARIA
         st.subheader("📝 INFORMACIÓN SUPLEMENTARIA")
-        suplementaria = st.text_input("Suplementaria", key='suplementaria', help="Opcional")
+        suplementaria = st.text_input("Suplementaria", key='suplementaria', help="Opcional - Ej: RMK CB AL NE")
         
         st.markdown("---")
         
@@ -704,7 +889,6 @@ with col_izq:
             st.rerun()
         
         if generar:
-            # Recopilar datos
             datos = {
                 'tipo': tipo,
                 'dia': dia,
@@ -714,6 +898,7 @@ with col_izq:
                 'var_viento': var_viento,
                 'vis': vis,
                 'vis_min': vis_min,
+                'rvr': rvr,
                 'fenomeno': fenomeno,
                 'nubes': nubes,
                 'temp': temp,
@@ -727,12 +912,9 @@ with col_izq:
             resultado = generar_metar(datos)
             
             if resultado['success']:
-                # Guardar registro
                 st.session_state.registros.append(resultado['registro'])
                 st.session_state.historial.insert(0, resultado['metar'])
                 st.session_state.contador += 1
-                
-                # Mostrar éxito
                 st.success("✅ METAR generado correctamente")
                 st.session_state.ultimo_metar = resultado['metar']
                 st.session_state.ultimo_tipo = tipo
@@ -814,14 +996,7 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p>✈️ METAR Digital - CORPAC Perú | Aeropuerto Internacional Jorge Chávez (SPJC)</p>
-    <p style='font-size: 0.8rem;'>Versión 1.0 - Sistema de codificación METAR/SPECI</p>
+    <p style='font-size: 0.8rem;'>Versión 2.0 - Sistema Profesional de Codificación METAR/SPECI</p>
+    <p style='font-size: 0.8rem;'>✓ RVR ✓ Visibilidad Mínima con Cuadrantes ✓ Variación Circular de Viento</p>
 </div>
 """, unsafe_allow_html=True)
-
-# ============================================
-# ACTUALIZAR RELOJ UTC
-# ============================================
-import time
-if 'reloj' not in st.session_state:
-    st.session_state.reloj = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    st.rerun()
