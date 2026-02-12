@@ -694,22 +694,46 @@ def exportar_a_excel(registros):
     try:
         df = pd.DataFrame(registros)
         
-        columnas = [
-            'DIA', 'HORA', 'TIPO', 'DIRECCION DEL VIENTO', 'INTENSIDAD DEL VIENTO',
-            'VARIACION DEL VIENTO', 'VISIBILIDAD (TEXTO CLARO)', 'VISIBILIDAD (CODIGO)',
-            'VISIBILIDAD MINIMA', 'RVR', 'FEN. METEOROLOGICOS (TEXTO CLARO) ', 'FEN. METEOROLOGICOS (CODIGO)',
-            'NUBES (TEXTO CLARO)', 'NUBES (CODIGO)', 'TEMPERATURA', 'PUNTO DE ROCIO',
-            'HUMEDAD RELATIVA (%)', 'QNH', 'PRESION DE ESTACION',
-            'INFORMACIÓN SUPLEMENTARIA', 'METAR COMPLETO (CODIGO)'
-        ]
+        # Diccionario para mapear nombres originales -> nuevos encabezados
+        mapeo_columnas = {
+            'Día': 'DIA',
+            'Hora': 'HORA',
+            'Tipo': 'TIPO',
+            'Dirección_Viento': 'DIRECCION DEL VIENTO',
+            'Intensidad_Viento': 'INTENSIDAD DEL VIENTO',
+            'Variación_Viento': 'VARIACION DEL VIENTO',
+            'Visibilidad_Original': 'VISIBILIDAD (TEXTO CLARO)',
+            'Visibilidad_Metros': 'VISIBILIDAD (CODIGO)',
+            'Visibilidad_Mínima': 'VISIBILIDAD MINIMA',
+            'RVR': 'RVR',
+            'Fenómeno_Texto': 'FEN. METEOROLOGICOS (TEXTO CLARO)',
+            'Fenómeno_Código': 'FEN. METEOROLOGICOS (CODIGO)',
+            'Nubes_Texto': 'NUBES (TEXTO CLARO)',
+            'Nubes_Código': 'NUBES (CODIGO)',
+            'Temperatura': 'TEMPERATURA',
+            'Punto_Rocío': 'PUNTO DE ROCIO',
+            'Humedad_Relativa_%': 'HUMEDAD RELATIVA (%)',
+            'QNH': 'QNH',
+            'Presión_Estación': 'PRESION DE ESTACION',
+            'Info_Suplementaria': 'INFORMACIÓN SUPLEMENTARIA',
+            'METAR_Completo': 'METAR COMPLETO (CODIGO)'}
         
+        # Renombrar las columnas del DataFrame
+        df = df.rename(columns=mapeo_columnas)
+        
+        # Ahora sí, usar tus nuevos nombres de columnas
+        columnas = list(mapeo_columnas.values())
+        
+        # Asegurar que todas las columnas existen
         for col in columnas:
             if col not in df.columns:
                 df[col] = ""
         
         df = df[columnas]
-        df['Día'] = df['Día'].astype(str).str.zfill(2)
-        df['Hora'] = df['Hora'].astype(str).str.zfill(4)
+        
+        # Formatear DÍA y HORA con ceros a la izquierda
+        df['DIA'] = df['DIA'].astype(str).str.zfill(2)
+        df['HORA'] = df['HORA'].astype(str).str.zfill(4)
         
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
