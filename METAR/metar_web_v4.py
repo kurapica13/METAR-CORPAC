@@ -1084,7 +1084,5 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p style='font-size: 1.1rem;'>✈️ METAR Digital <span style='background: #27ae60; color: white; padding: 3px 15px; border-radius: 20px; font-weight: bold;'>V3.0</span> - CORPAC Perú</p>
-    <p style='font-size: 0.9rem;'>✅ SIN DUPLICADOS | ✅ VISIBILIDAD MÍNIMA CORREGIDA (SE, NW) | ✅ EXCEL CON ENCABEZADOS PERSONALIZADOS</p>
-    <p style='font-size: 0.8rem; color: #e67e22;'>Aeropuerto Internacional Jorge Chávez (SPJC) - Sistema Profesional de Codificación METAR/SPECI</p>
 </div>
 """, unsafe_allow_html=True)
