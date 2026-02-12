@@ -1,5 +1,5 @@
 """
-METAR DIGITAL WEB V3.0 - VERSIÓN PROFESIONAL CORPAC PERÚ
+METAR DIGITAL WEB - V CORPAC PERÚ
 Características:
 ✅ SIN DUPLICADOS: Reemplaza reportes con misma fecha/hora
 ✅ VIENTO: Reglas circulares (340V080) corregidas
@@ -23,7 +23,7 @@ from io import BytesIO
 # CONFIGURACIÓN DE PÁGINA - VERSIÓN 3.0
 # ============================================
 st.set_page_config(
-    page_title="METAR Digital V3 - CORPAC Perú",
+    page_title="METAR Digital - CORPAC Perú",
     page_icon="🔄",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -1009,7 +1009,7 @@ with col_izq:
                 if accion == "actualizado":
                     st.warning("🔄 METAR ACTUALIZADO - Reemplazó reporte existente con la misma fecha/hora")
                 else:
-                    st.success("✅ METAR V3 generado correctamente")
+                    st.success("✅ METAR generado correctamente")
                 
                 st.session_state.ultimo_metar_v3 = resultado['metar']
                 st.session_state.ultimo_tipo_v3 = tipo
@@ -1018,7 +1018,7 @@ with col_izq:
 
 with col_der:
     # METAR GENERADO
-    st.subheader("📊 METAR V3 GENERADO")
+    st.subheader("📊 METAR GENERADO")
     if 'ultimo_metar_v3' in st.session_state:
         tipo_ultimo = st.session_state.get('ultimo_tipo_v3', 'METAR')
         if tipo_ultimo == "SPECI":
@@ -1031,7 +1031,7 @@ with col_der:
     st.markdown("---")
     
     # BOTONES DE ACCIÓN
-    st.subheader("💾 EXPORTAR V3")
+    st.subheader("💾 EXPORTAR")
     
     col1, col2 = st.columns(2)
     with col1:
