@@ -282,7 +282,7 @@ def procesar_visibilidad_minima_v3(vis_min_texto, vis_m):
     
     vis_min_texto = vis_min_texto.strip().upper()
     # ORDEN CRÍTICO: primero cuadrantes de 2 letras, luego de 1 letra
-    cuadrantes = ['NW', 'NE', 'SW', 'SE', 'N', 'S', 'E', 'W']
+    cuadrantes = ['NE', 'NW', 'SE', 'SW', 'N', 'S', 'E', 'W']
     
     valor = ""
     cuadrante = ""
