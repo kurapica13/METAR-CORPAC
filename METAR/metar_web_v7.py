@@ -863,30 +863,31 @@ with col_header1:
     st.markdown("<p style='color: #666;'>Aeropuerto Internacional Jorge Chávez - CORPAC Perú</p>", unsafe_allow_html=True)
 
 with col_header2:
-    # Crear un placeholder para el reloj
+    # Placeholder para el reloj
     reloj_placeholder = st.empty()
     
-    # Obtener hora actual
-    ahora = datetime.now(timezone.utc)
-    
-    # Mostrar el reloj en el placeholder
-    reloj_placeholder.markdown(f"""
-    <div style='text-align: right;'>
-        <h3 style='color: #0b3d91; margin-bottom: 5px;'>UTC {ahora.strftime('%H:%M:%S')}</h3>
-        <p style='color: #666; margin-top: 0;'>{ahora.strftime('%d/%m/%Y')}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Actualizar reloj
+    with reloj_placeholder.container():
+        ahora = datetime.now(timezone.utc)
+        col_hora, col_fecha = st.columns([1, 1])
+        with col_hora:
+            st.markdown(f"<h3 style='color: #0b3d91; text-align: right;'>UTC {ahora.strftime('%H:%M:%S')}</h3>", unsafe_allow_html=True)
+        with col_fecha:
+            st.markdown(f"<p style='color: #666; text-align: right; margin-top: 10px;'>{ahora.strftime('%d/%m/%Y')}</p>", unsafe_allow_html=True)
 
-# Auto-refresh cada 1 segundo
-if 'ultimo_refresh' not in st.session_state:
-    st.session_state.ultimo_refresh = time.time()
+# Usar un contador simple para refrescar
+if 'refresh_count' not in st.session_state:
+    st.session_state.refresh_count = 0
 
-if time.time() - st.session_state.ultimo_refresh > 1:
-    st.session_state.ultimo_refresh = time.time()
+st.session_state.refresh_count += 1
+
+# Refrescar cada 1 segundo (10 iteraciones de Streamlit ≈ 1 segundo)
+if st.session_state.refresh_count % 10 == 0:
+    st.session_state.refresh_count = 0
+    time.sleep(0.1)
     st.rerun()
 
 st.markdown("---")
-
 col_izq, col_der = st.columns([2, 1])
 
 with col_izq:
