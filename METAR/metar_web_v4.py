@@ -866,8 +866,8 @@ col1, col2 = st.columns([3, 1])
 with col1:
     st.markdown("""
     <div style='display: flex; align-items: center;'>
-        <h1 style='color: #0b3d91; margin-right: 15px;'>✈️ METAR DIGITAL V3</h1>
-        <span style='background: #27ae60; color: white; padding: 8px 20px; border-radius: 30px; font-size: 16px; font-weight: bold;'>SIN DUPLICADOS</span>
+        <h1 style='color: #0b3d91; margin-right: 15px;'>✈️ METAR DIGITAL </h1>
+        <span style='background: #27ae60; color: white; padding: 8px 20px; border-radius: 30px; font-size: 16px; font-weight: bold;'></span>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<p style='color: #666; font-size: 1.1rem;'>Aeropuerto Internacional Jorge Chávez (SPJC) - CORPAC Perú</p>", unsafe_allow_html=True)
@@ -1067,7 +1067,7 @@ with col_der:
     st.markdown("---")
     
     # HISTORIAL
-    st.subheader("📜 HISTORIAL V3")
+    st.subheader("📜 HISTORIAL")
     if st.session_state.historial_v3:
         for i, metar in enumerate(st.session_state.historial_v3[:10]):
             if "SPECI" in metar:
