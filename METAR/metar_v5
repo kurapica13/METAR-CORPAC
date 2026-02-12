@@ -645,7 +645,7 @@ def exportar_a_excel(registros):
         # Convertir a DataFrame
         df = pd.DataFrame(registros)
         
-        # Renombrar columnas para mejor presentación
+        # Renombrar columnas básico
         df = df.rename(columns={
             'Día': 'DIA',
             'Hora': 'HORA',
@@ -674,149 +674,47 @@ def exportar_a_excel(registros):
         df['DIA'] = df['DIA'].astype(str).str.zfill(2)
         df['HORA'] = df['HORA'].astype(str).str.zfill(4)
         
-        # Obtener lista de días únicos (orden descendente)
-        dias_unicos = sorted(df['DIA'].unique(), reverse=True)
-        
-        # Crear archivo Excel con múltiples hojas
+        # Crear archivo Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             
-            from openpyxl.utils import get_column_letter
-            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            # Si hay varios días, crear una hoja por día
+            dias_unicos = df['DIA'].unique()
             
-            # Estilos reutilizables
-            header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-            header_fill = PatternFill(start_color='0B3D91', end_color='0B3D91', fill_type='solid')
-            header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            
-            border = Border(
-                left=Side(style='thin', color='CCCCCC'),
-                right=Side(style='thin', color='CCCCCC'),
-                top=Side(style='thin', color='CCCCCC'),
-                bottom=Side(style='thin', color='CCCCCC')
-            )
-            
-            # Crear una hoja por cada día
-            for dia in dias_unicos:
-                # Filtrar registros del día
-                df_dia = df[df['DIA'] == dia].copy()
+            if len(dias_unicos) > 1:
+                # Múltiples hojas - una por día
+                for dia in sorted(dias_unicos, reverse=True):
+                    df_dia = df[df['DIA'] == dia].copy()
+                    df_dia = df_dia.sort_values('HORA', ascending=False)
+                    sheet_name = f"DIA_{dia}"
+                    df_dia.to_excel(writer, sheet_name=sheet_name, index=False)
                 
-                # Ordenar por hora (más reciente primero)
-                df_dia = df_dia.sort_values('HORA', ascending=False)
-                
-                # Nombre de la hoja: DIA_12, DIA_13, etc.
-                sheet_name = f"DIA_{dia}"
-                
-                # Escribir a Excel
-                df_dia.to_excel(writer, sheet_name=sheet_name, index=False)
-                worksheet = writer.sheets[sheet_name]
-                
-                # --- FORMATO DE CABECERA ---
-                for col in range(1, len(df_dia.columns) + 1):
-                    cell = worksheet.cell(row=1, column=col)
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = header_align
-                
-                worksheet.row_dimensions[1].height = 30
-                
-                # --- ANCHO AUTOMÁTICO DE COLUMNAS ---
-                for col in range(1, len(df_dia.columns) + 1):
-                    column_letter = get_column_letter(col)
-                    max_length = 0
-                    
-                    # Cabecera
-                    header_cell = worksheet.cell(row=1, column=col)
-                    max_length = len(str(header_cell.value)) if header_cell.value else 0
-                    
-                    # Datos (primeros 100 registros)
-                    for row in range(2, min(len(df_dia) + 2, 102)):
-                        cell = worksheet.cell(row=row, column=col)
-                        if cell.value:
-                            cell_length = len(str(cell.value))
-                            if cell_length > max_length:
-                                max_length = cell_length
-                    
-                    adjusted_width = min(max_length + 2, 70)
-                    worksheet.column_dimensions[column_letter].width = max(adjusted_width, 8)
-                
-                # --- FORMATO DE DATOS ---
-                for row in range(2, len(df_dia) + 2):
-                    tipo_reporte = worksheet.cell(row=row, column=3).value  # Columna TIPO
-                    
-                    for col in range(1, len(df_dia.columns) + 1):
-                        cell = worksheet.cell(row=row, column=col)
-                        cell.border = border
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                        
-                        # Formato especial para SPECI
-                        if tipo_reporte == 'SPECI':
-                            cell.fill = PatternFill(start_color='FFE699', end_color='FFE699', fill_type='solid')
-                            cell.font = Font(name='Calibri', size=10, bold=True)
-                        else:
-                            cell.font = Font(name='Calibri', size=10)
-                
-                # Congelar paneles
-                worksheet.freeze_panes = 'A2'
-            
-            # --- HOJA DE RESUMEN ---
-            resumen_data = []
-            for dia in dias_unicos:
-                df_dia = df[df['DIA'] == dia]
-                metar_count = len(df_dia[df_dia['TIPO'] == 'METAR'])
-                speci_count = len(df_dia[df_dia['TIPO'] == 'SPECI'])
-                
-                # Obtener primera y última hora
-                primera_hora = df_dia['HORA'].min()
-                ultima_hora = df_dia['HORA'].max()
-                
-                resumen_data.append({
-                    'DÍA': dia,
-                    'METAR': metar_count,
-                    'SPECI': speci_count,
-                    'TOTAL': len(df_dia),
-                    'PRIMER REPORTE': f"{primera_hora[:2]}:{primera_hora[2:]}Z",
-                    'ÚLTIMO REPORTE': f"{ultima_hora[:2]}:{ultima_hora[2:]}Z"
-                })
-            
-            df_resumen = pd.DataFrame(resumen_data)
-            df_resumen = df_resumen.sort_values('DÍA', ascending=False)
-            df_resumen.to_excel(writer, sheet_name='RESUMEN', index=False)
-            
-            # Formato de la hoja resumen
-            worksheet_resumen = writer.sheets['RESUMEN']
-            for col in range(1, len(df_resumen.columns) + 1):
-                cell = worksheet_resumen.cell(row=1, column=col)
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.alignment = header_align
-            
-            # Ancho automático para resumen
-            for col in range(1, len(df_resumen.columns) + 1):
-                column_letter = get_column_letter(col)
-                worksheet_resumen.column_dimensions[column_letter].width = 18
+                # Hoja de resumen
+                resumen = []
+                for dia in sorted(dias_unicos, reverse=True):
+                    df_dia = df[df['DIA'] == dia]
+                    resumen.append({
+                        'DÍA': dia,
+                        'TOTAL': len(df_dia),
+                        'METAR': len(df_dia[df_dia['TIPO'] == 'METAR']),
+                        'SPECI': len(df_dia[df_dia['TIPO'] == 'SPECI'])
+                    })
+                df_resumen = pd.DataFrame(resumen)
+                df_resumen.to_excel(writer, sheet_name='RESUMEN', index=False)
+            else:
+                # Un solo día - una sola hoja
+                df = df.sort_values('HORA', ascending=False)
+                df.to_excel(writer, sheet_name=f"DIA_{dias_unicos[0]}", index=False)
         
         output.seek(0)
         
-        # Mensaje de éxito
-        total_dias = len(dias_unicos)
-        total_registros = len(registros)
-        
-        if total_dias == 1:
-            dias_msg = f"1 día (DÍA {dias_unicos[0]})"
-        else:
-            dias_msg = f"{total_dias} días: DÍA {dias_unicos[0]} al DÍA {dias_unicos[-1]}"
-        
-        mensaje = f"✅ {total_registros} registros exportados\n"
-        mensaje += f"📅 {dias_msg}\n"
-        mensaje += f"📊 {len([r for r in registros if r.get('Tipo') == 'METAR'])} METAR | "
-        mensaje += f"{len([r for r in registros if r.get('Tipo') == 'SPECI'])} SPECI"
+        mensaje = f"✅ {len(registros)} registros exportados"
+        if len(dias_unicos) > 1:
+            mensaje += f" en {len(dias_unicos)} días"
         
         return output, mensaje
         
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
         return None, f"Error al exportar: {str(e)}"
 
 # ============================================
@@ -997,26 +895,25 @@ with col_der:
     st.subheader("💾 EXPORTAR")
     
     if st.button("📥 Exportar Excel", use_container_width=True):
-        if st.session_state.registros:
-            excel_file, mensaje = exportar_a_excel(st.session_state.registros)
-            if excel_file:
-                from datetime import datetime
-                # NOMBRE DE ARCHIVO: SPJC_METAR_2026_02.xlsx
-                fecha_actual = datetime.now()
-                nombre_archivo = f"SPJC_METAR_{fecha_actual.strftime('%Y_%m')}.xlsx"
-                
-                st.download_button(
-                    label="📥 Descargar Excel",
-                    data=excel_file,
-                    file_name=nombre_archivo,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-                st.success(mensaje)
-            else:
-                st.warning(mensaje)
+    if st.session_state.registros:
+        excel_file, mensaje = exportar_a_excel(st.session_state.registros)
+        if excel_file:
+            from datetime import datetime
+            fecha_actual = datetime.now()
+            nombre_archivo = f"SPJC_METAR_{fecha_actual.strftime('%Y_%m')}.xlsx"
+            
+            st.download_button(
+                label="📥 Click para Descargar Excel",
+                data=excel_file,
+                file_name=nombre_archivo,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+            st.success(mensaje)
         else:
-            st.warning("⚠️ No hay registros para exportar")
+            st.warning(mensaje)
+    else:
+        st.warning("⚠️ No hay registros para exportar")
     
     if st.button("🗑️ Limpiar Memoria", use_container_width=True):
         st.session_state.registros = []
