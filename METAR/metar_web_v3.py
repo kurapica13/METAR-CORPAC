@@ -3,10 +3,10 @@ METAR DIGITAL WEB V3.0 - VERSIÓN PROFESIONAL CORPAC PERÚ
 Características:
 ✅ SIN DUPLICADOS: Reemplaza reportes con misma fecha/hora
 ✅ VIENTO: Reglas circulares (340V080) corregidas
-✅ VISIBILIDAD MÍNIMA: Cuadrantes SE, NW, etc. corregido
+✅ VISIBILIDAD MÍNIMA: Cuadrantes SE, NW, etc. CORREGIDO
 ✅ RVR: Runway Visual Range
 ✅ NUBES: Estándar oficial CORPAC (30m/1000m)
-✅ EXCEL: Encabezados personalizados en español
+✅ EXCEL: Encabezados personalizados en español CORREGIDO
 """
 
 import streamlit as st
@@ -268,9 +268,12 @@ def convertir_visibilidad(vis_texto):
     except:
         raise ValueError("Formato de visibilidad inválido")
 
-def procesar_visibilidad_minima(vis_min_texto, vis_m):
+# ============================================
+# FUNCIÓN CORREGIDA PARA VISIBILIDAD MÍNIMA - ¡ESTA ES LA BUENA!
+# ============================================
+def procesar_visibilidad_minima_v3(vis_min_texto, vis_m):
     """
-    Procesa visibilidad mínima con cuadrantes - CORREGIDO
+    Procesa visibilidad mínima con cuadrantes - VERSIÓN CORREGIDA
     Cuadrantes: N, NE, E, SE, S, SW, W, NW
     Reglas: 1) <1500m 2) <50% vis reinante y <5000m
     """
@@ -278,7 +281,7 @@ def procesar_visibilidad_minima(vis_min_texto, vis_m):
         return "", ""
     
     vis_min_texto = vis_min_texto.strip().upper()
-    # ORDEN IMPORTANTE: primero cuadrantes de 2 letras, luego de 1 letra
+    # ORDEN CRÍTICO: primero cuadrantes de 2 letras, luego de 1 letra
     cuadrantes = ['NW', 'NE', 'SW', 'SE', 'N', 'S', 'E', 'W']
     
     valor = ""
@@ -571,10 +574,10 @@ def validar_humedad(hr):
         raise ValueError("Humedad inválida")
 
 # ============================================
-# FUNCIÓN PRINCIPAL DE GENERACIÓN
+# FUNCIÓN PRINCIPAL DE GENERACIÓN - CORREGIDA
 # ============================================
 def generar_metar_v3(datos):
-    """Genera código METAR desde los datos del formulario"""
+    """Genera código METAR desde los datos del formulario - VERSIÓN CORREGIDA"""
     try:
         # Validar campos obligatorios
         if not datos['dir_viento'] or not datos['int_viento']:
@@ -594,10 +597,11 @@ def generar_metar_v3(datos):
         # Procesar visibilidad
         vis_m = convertir_visibilidad(datos['vis'])
         
-        # Procesar visibilidad mínima con cuadrante (CORREGIDO)
+        # ===== IMPORTANTE: USAR LA FUNCIÓN CORREGIDA =====
+        # Procesar visibilidad mínima con cuadrante - VERSIÓN V3 CORREGIDA
         vis_min_codigo = ""
         if datos['vis_min']:
-            vis_min_codigo, vis_min_error = procesar_visibilidad_minima(datos['vis_min'], vis_m)
+            vis_min_codigo, vis_min_error = procesar_visibilidad_minima_v3(datos['vis_min'], vis_m)
             if vis_min_error:
                 raise ValueError(vis_min_error)
         
@@ -682,10 +686,10 @@ def generar_metar_v3(datos):
         }
 
 # ============================================
-# FUNCIÓN PARA EXPORTAR EXCEL - CON ENCABEZADOS PERSONALIZADOS
+# FUNCIÓN PARA EXPORTAR EXCEL - VERSIÓN CORREGIDA
 # ============================================
 def exportar_a_excel_v3(registros):
-    """Exporta registros a Excel con formato profesional y encabezados personalizados"""
+    """Exporta registros a Excel con formato profesional y encabezados personalizados - VERSIÓN CORREGIDA"""
     if not registros:
         return None, "No hay registros para exportar"
     
@@ -718,7 +722,7 @@ def exportar_a_excel_v3(registros):
             'METAR_Completo': 'METAR COMPLETO (CODIGO)'
         }
         
-        # APLICAR EL RENOMBRADO DE COLUMNAS
+        # APLICAR EL RENOMBRADO DE COLUMNAS - ¡ESTA ES LA LÍNEA CLAVE!
         df = df.rename(columns=mapeo_columnas)
         
         # Usar los nuevos nombres de columnas
@@ -739,10 +743,10 @@ def exportar_a_excel_v3(registros):
         # Exportar a Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='METAR', index=False)
+            df.to_excel(writer, sheet_name='METAR V3', index=False)
             
             workbook = writer.book
-            worksheet = writer.sheets['METAR']
+            worksheet = writer.sheets['METAR V3']
             
             from openpyxl.utils import get_column_letter
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -822,6 +826,7 @@ def exportar_a_excel_v3(registros):
                     if tipo_reporte == "SPECI":
                         cell.fill = speci_fill
                         cell.font = speci_font
+                        cell.border = border_datos
                     else:
                         cell.border = border_datos
                         cell.font = font_datos
@@ -854,22 +859,24 @@ def exportar_a_excel_v3(registros):
         return None, f"Error al exportar: {str(e)}"
 
 # ============================================
-# INTERFAZ DE USUARIO - VERSIÓN 3
+# INTERFAZ DE USUARIO - VERSIÓN 3 CORREGIDA
 # ============================================
-st.markdown("""
-<div style='display: flex; align-items: center; justify-content: space-between;'>
+# Header
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown("""
     <div style='display: flex; align-items: center;'>
         <h1 style='color: #0b3d91; margin-right: 15px;'>✈️ METAR DIGITAL V3</h1>
         <span style='background: #27ae60; color: white; padding: 8px 20px; border-radius: 30px; font-size: 16px; font-weight: bold;'>SIN DUPLICADOS</span>
     </div>
-    <div style='text-align: right;'>
-        <h3 style='color: #0b3d91;'>UTC " + datetime.now(timezone.utc).strftime("%H:%M:%S") + "</h3>
-        <p style='color: #666;'>" + datetime.now().strftime('%d/%m/%Y') + "</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+    st.markdown("<p style='color: #666; font-size: 1.1rem;'>Aeropuerto Internacional Jorge Chávez (SPJC) - CORPAC Perú</p>", unsafe_allow_html=True)
 
-st.markdown("<p style='color: #666; font-size: 1.1rem;'>Aeropuerto Internacional Jorge Chávez (SPJC) - CORPAC Perú</p>", unsafe_allow_html=True)
+with col2:
+    ahora = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    st.markdown(f"<h3 style='color: #0b3d91; text-align: right;'>UTC {ahora}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color: #666; text-align: right;'>{datetime.now().strftime('%d/%m/%Y')}</p>", unsafe_allow_html=True)
+
 st.markdown("---")
 
 # Columnas principales
@@ -907,7 +914,7 @@ with col_izq:
         with col1:
             vis = st.text_input("Visibilidad", key='vis_v3', help="Ej: 10km, 5000m, 9999")
         with col2:
-            vis_min = st.text_input("Visibilidad Mínima", key='vis_min_v3', help="Ej: 1200SW, 0800NE, 3000N, 1500SE")
+            vis_min = st.text_input("Visibilidad Mínima", key='vis_min_v3', help="Ej: 1200SW, 0800NE, 3000N, 1500SE, 2000NW")
         with col3:
             rvr = st.text_input("RVR (m)", key='rvr_v3', help="Runway Visual Range - Ej: 0600, 1200")
         
@@ -1077,7 +1084,7 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p style='font-size: 1.1rem;'>✈️ METAR Digital <span style='background: #27ae60; color: white; padding: 3px 15px; border-radius: 20px; font-weight: bold;'>V3.0</span> - CORPAC Perú</p>
-    <p style='font-size: 0.9rem;'>✅ SIN DUPLICADOS | ✅ Visibilidad Mínima CORREGIDA (SE, NW) | ✅ Excel con encabezados personalizados</p>
+    <p style='font-size: 0.9rem;'>✅ SIN DUPLICADOS | ✅ VISIBILIDAD MÍNIMA CORREGIDA (SE, NW) | ✅ EXCEL CON ENCABEZADOS PERSONALIZADOS</p>
     <p style='font-size: 0.8rem; color: #e67e22;'>Aeropuerto Internacional Jorge Chávez (SPJC) - Sistema Profesional de Codificación METAR/SPECI</p>
 </div>
 """, unsafe_allow_html=True)
