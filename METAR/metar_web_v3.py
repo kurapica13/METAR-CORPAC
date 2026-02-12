@@ -695,12 +695,12 @@ def exportar_a_excel(registros):
         df = pd.DataFrame(registros)
         
         columnas = [
-            'Día', 'Hora', 'Tipo', 'Dirección_Viento', 'Intensidad_Viento',
-            'Variación_Viento', 'Visibilidad_Original', 'Visibilidad_Metros',
-            'Visibilidad_Mínima', 'RVR', 'Fenómeno_Texto', 'Fenómeno_Código',
-            'Nubes_Texto', 'Nubes_Código', 'Temperatura', 'Punto_Rocío',
-            'Humedad_Relativa_%', 'QNH', 'Presión_Estación',
-            'Info_Suplementaria', 'METAR_Completo'
+            'DIA', 'HORA', 'TIPO', 'DIRECCION DEL VIENTO', 'INTENSIDAD DEL VIENTO',
+            'VARIACION DEL VIENTO', 'VISIBILIDAD (TEXTO CLARO)', 'VISIBILIDAD (CODIGO)',
+            'VISIBILIDAD MINIMA', 'RVR', 'FEN. METEOROLOGICOS (TEXTO CLARO) ', 'FEN. METEOROLOGICOS (CODIGO)',
+            'NUBES (TEXTO CLARO)', 'NUBES (CODIGO)', 'TEMPERATURA', 'PUNTO DE ROCIO',
+            'HUMEDAD RELATIVA (%)', 'QNH', 'PRESION DE ESTACION',
+            'INFORMACIÓN SUPLEMENTARIA', 'METAR COMPLETO (CODIGO)'
         ]
         
         for col in columnas:
