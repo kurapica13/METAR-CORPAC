@@ -20,6 +20,7 @@ from pathlib import Path
 import re
 import os
 from io import BytesIO
+import time  
 
 # ============================================
 # CONFIGURACIÓN DE PÁGINA
