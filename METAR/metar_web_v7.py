@@ -852,17 +852,64 @@ def exportar_a_excel(registros):
 # ============================================
 # INTERFAZ DE USUARIO
 # ============================================
+# ============================================
+# HEADER CON RELOJ UTC EN TIEMPO REAL
+# ============================================
 col_header1, col_header2 = st.columns([3, 1])
+
 with col_header1:
-    st.markdown("<h1 style='color: #0b3d91;'>✈️ METAR DIGITAL - SPJC</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #666;'>Aeropuerto Internacional Jorge Chávez - CORPAC Perú</p>", unsafe_allow_html=True)
+    st.markdown("""
+    <h1 style='color: #0b3d91;'>✈️ METAR DIGITAL - SPJC</h1>
+    <p style='color: #666;'>Aeropuerto Internacional Jorge Chávez - CORPAC Perú</p>
+    """, unsafe_allow_html=True)
 
 with col_header2:
-    ahora = datetime.now(timezone.utc)
-    st.markdown(f"<h3 style='color: #0b3d91; text-align: right;'>UTC {ahora.strftime('%H:%M:%S')}</h3>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color: #666; text-align: right;'>{ahora.strftime('%d/%m/%Y')}</p>", unsafe_allow_html=True)
+    # Reloj UTC con JavaScript - ACTUALIZACIÓN EN TIEMPO REAL
+    st.markdown("""
+    <div style='text-align: right;'>
+        <h3 style='color: #0b3d91; margin-bottom: 5px;'>UTC <span id="utc-clock">--:--:--</span></h3>
+        <p style='color: #666; margin-top: 0;' id="utc-date">--/--/----</p>
+    </div>
+    
+    <script>
+        function actualizarRelojUTC() {
+            const ahora = new Date();
+            
+            // Formato hora: HH:MM:SS
+            const horas = String(ahora.getUTCHours()).padStart(2, '0');
+            const minutos = String(ahora.getUTCMinutes()).padStart(2, '0');
+            const segundos = String(ahora.getUTCSeconds()).padStart(2, '0');
+            
+            // Formato fecha: DD/MM/YYYY
+            const dia = String(ahora.getUTCDate()).padStart(2, '0');
+            const mes = String(ahora.getUTCMonth() + 1).padStart(2, '0');
+            const anio = ahora.getUTCFullYear();
+            
+            // Actualizar elementos
+            const relojElement = document.getElementById('utc-clock');
+            const fechaElement = document.getElementById('utc-date');
+            
+            if (relojElement) relojElement.textContent = `${horas}:${minutos}:${segundos}`;
+            if (fechaElement) fechaElement.textContent = `${dia}/${mes}/${anio}`;
+        }
+        
+        // Actualizar inmediatamente
+        actualizarRelojUTC();
+        
+        // Actualizar cada segundo
+        setInterval(actualizarRelojUTC, 1000);
+    </script>
+    
+    <style>
+        /* Evitar que el script se muestre como texto */
+        script {
+            display: none;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.markdown("---")
+
 
 col_izq, col_der = st.columns([2, 1])
 
