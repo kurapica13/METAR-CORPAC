@@ -255,7 +255,7 @@ def procesar_visibilidad_minima(vis_min_texto, vis_m):
         return "", ""
     
     vis_min_texto = vis_min_texto.strip().upper()
-    cuadrantes = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    cuadrantes = ['NW', 'NE', 'SE', 'SW', 'S', 'N', 'W', 'E']
     
     valor = ""
     cuadrante = ""
