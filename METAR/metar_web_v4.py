@@ -1042,7 +1042,7 @@ with col_der:
                     st.download_button(
                         label="📥 Descargar Excel V3",
                         data=excel_file,
-                        file_name=f"METAR_V3_SPJC_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        file_name=f"METAR_SPJC_{datetime.now().strftime('%Y_%m_%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
