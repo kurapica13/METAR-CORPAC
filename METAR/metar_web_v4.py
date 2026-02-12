@@ -909,7 +909,6 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p>✈️ METAR Digital - CORPAC Perú | Aeropuerto Internacional Jorge Chávez (SPJC)</p>
-    <p style='font-size: 0.8rem;'>Sistema Profesional de Codificación METAR/SPECI</p>
-    <p style='font-size: 0.8rem;'>✓ RVR ✓ Visibilidad Mínima con Cuadrantes ✓ Variación Circular de Viento ✓ Sin Duplicados</p>
+    <p style='font-size: 0.8rem;'>Sistema de Codificación METAR/SPECI</p>
 </div>
 """, unsafe_allow_html=True)
