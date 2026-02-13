@@ -1013,9 +1013,9 @@ with col_izq:
         st.markdown("<div class='section-title'>TEMPERATURA, HUMEDAD Y PRESION</div>", unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            temp = st.text_input("Temp C", key='temp', help="-10 a 40C")
+            temp = st.text_input("Temperatura del aire", key='temp', help="-10 a 40C")
         with col2:
-            rocio = st.text_input("Rocio C", key='rocio', help="≤ Temperatura")
+            rocio = st.text_input("Temperatura de Rocio", key='rocio', help="≤ Temperatura")
         with col3:
             hr = st.text_input("HR %", key='hr', help="Humedad Relativa (0-100%)")
         with col4:
