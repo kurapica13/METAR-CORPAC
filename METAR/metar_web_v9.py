@@ -1029,7 +1029,7 @@ with col_izq:
         
         # INFORMACION SUPLEMENTARIA
         st.markdown("<div class='section-title'>INFORMACION SUPLEMENTARIA</div>", unsafe_allow_html=True)
-        suplementaria = st.text_input("Suplementaria", key='suplementaria', help="Opcional - Ej: RMK CB AL NE")
+        suplementaria = st.text_input("", key='suplementaria', help="Ej: NOSIG RMK PP000")
         
         st.markdown("---")
         
