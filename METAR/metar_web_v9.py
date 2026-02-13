@@ -676,7 +676,7 @@ def verificar_cavok(vis_m, fenomeno, nubes):
 # ============================================
 def validar_hora(hora_str):
     if not hora_str:
-        raise ValueError("⚠️ La Hora UTC es OBLIGATORIA - Formato HHMM (ej: 1230)")
+        raise ValueError("Formato HHMM (ej: 1230)")
     if len(hora_str) != 4 or not hora_str.isdigit():
         raise ValueError("Hora debe ser HHMM (4 dígitos)")
     h = int(hora_str[:2])
@@ -975,9 +975,7 @@ with col_izq:
             dia = st.text_input("Dia", key='dia', help="Formato: DD (01-31)")
         with col3:
             hora = st.text_input("Hora UTC", key='hora', help="INGRESE HORA MANUALMENTE - Formato HHMM (ej: 1230)")
-        
-        st.markdown("<p style='color: #ff0000; font-size: 12px;'>La hora UTC es OBLIGATORIA - Debe ingresarla manualmente</p>", unsafe_allow_html=True)
-        
+            
         st.markdown("---")
         
         # VIENTO
