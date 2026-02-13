@@ -2,7 +2,7 @@
 METAR DIGITAL - VERSIÓN PROFESIONAL CORPAC PERÚ
 Aeropuerto Internacional Jorge Chávez (SPJC)
 Características:
-✅ RVR - Formato SPJC: R32/0400, R12R/1700, R10/M0050, R14L/P2000 (exactamente como en AWOS)
+✅ RVR - Formato SPJC: R32/0400, R12R/1700, R10/M0050, R14L/P2000 
 ✅ Sin validaciones arbitrarias - El operador copia lo que ve en el equipo
 ✅ Almacenamiento mensual automático (SPJC_METAR_YYYY_MM.xlsx)
 ✅ Viento con reglas circulares (340V080)
@@ -1000,7 +1000,7 @@ with col_izq:
         with col2:
             vis_min = st.text_input("Visibilidad Minima", key='vis_min', help="Ej: 1200SW, 0800NE, 1500SE, 2000NW")
         with col3:
-            rvr = st.text_input("RVR", key='rvr', help="EXACTAMENTE como en AWOS - Ej: R32/0400, R12R/1700, R10/M0050, R14L/P2000")
+            rvr = st.text_input("RVR", key='rvr', help="R32/0400, R12R/1700, R10/M0050, R14L/P2000")
         
         st.markdown("---")
         
