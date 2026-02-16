@@ -894,6 +894,33 @@ def interpretar_nubes(texto, vis_m, fenomeno):
     
     return " ".join(codigos_nubes[:4]) if codigos_nubes else "NSC"
 
+def verificar_cavok(vis_m, fenomeno, nubes):
+    """
+    Verifica si se cumplen las condiciones para reportar CAVOK
+    CAVOK = Ceiling And Visibility OK (Techo y Visibilidad OK)
+    
+    Condiciones:
+    - Visibilidad ≥ 10 km (9999 en código METAR)
+    - Sin fenómenos significativos
+    - Sin nubes por debajo de 5000 pies o sin CB/TCU
+    - El código debe ser CAVOK, no NSC
+    """
+    # Verificar visibilidad ≥ 10 km
+    if vis_m < 9999:
+        return False
+    
+    # Verificar que no haya fenómenos significativos
+    if fenomeno and fenomeno.strip():
+        return False
+    
+    # ===== CORRECCIÓN: CAVOK solo si las nubes son CAVOK explícitamente =====
+    # Si nubes es "CAVOK", retornar True
+    if nubes == "CAVOK":
+        return True
+    
+    # Si nubes es "NSC" o cualquier otra cosa, NO es CAVOK
+    return False
+
 # ============================================
 # FUNCIONES DE VALIDACIÓN
 # ============================================
@@ -973,8 +1000,23 @@ def generar_metar(datos):
         
         rvr_codigo = procesar_rvr(datos['rvr'])
         fenomeno = codificar_fenomenos(datos['fenomeno'], vis_m)
+        # Calcular nubes
         nubes = interpretar_nubes(datos['nubes'], vis_m, fenomeno)
-        es_cavok = (nubes == "CAVOK")  # Si nubes es CAVOK, entonces es CAVOK
+
+        # Verificar CAVOK (esto ahora funcionará correctamente)
+        es_cavok = verificar_cavok(vis_m, fenomeno, nubes)
+
+if es_cavok:
+    metar_parts.append("CAVOK")
+else:
+    metar_parts.append(f"{vis_m:04d}")
+    if vis_min_codigo:
+        metar_parts.append(vis_min_codigo)
+    if rvr_codigo:
+        metar_parts.append(rvr_codigo)
+    if fenomeno:
+        metar_parts.append(fenomeno)
+    metar_parts.append(nubes)  # Aquí va NSC u otras nubes
         
         temp = validar_numero(datos['temp'], -10, 40, "Temperatura")
         rocio = validar_numero(datos['rocio'], -10, 40, "Punto de rocío")
