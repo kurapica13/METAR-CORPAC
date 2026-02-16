@@ -1109,7 +1109,7 @@ with col_izq:
             qnh = st.text_input("QNH hPa", key='qnh', help="850-1100 hPa")
         with col4:
             hr = st.text_input("HR %", key='hr', help="Opcional")
-        with col5
+        with col5:
             presion = st.text_input("Presion Estacion (opcional)", key='presion')
         
         st.markdown("---")
