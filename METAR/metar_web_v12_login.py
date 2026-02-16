@@ -795,6 +795,7 @@ def interpretar_nubes(texto, vis_m, fenomeno):
             altura_cientos = round(altura_metros / 30)
             altura_cientos = min(max(altura_cientos, 0), 999)
             return f"VV{altura_cientos:03d}"
+    return "VV///"
     # ===================================================
     
     # ===== VERIFICAR CAVOK =====
