@@ -987,7 +987,7 @@ def exportar_a_excel(registros):
 col_header1, col_header2 = st.columns([3, 1])
 
 with col_header1:
-    st.markdown("<h1 style='color: #0b3d91;'REGISTRO DE OBSERVACIONES ORDINARIAS Y ESPECIALES</h1>'", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: #0b3d91;'>REGISTRO DE OBSERVACIONES ORDINARIAS Y ESPECIALES</h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #666;'>Aeropuerto Internacional Jorge Chávez - CORPAC Perú</p>", unsafe_allow_html=True)
 
 with col_header2:
