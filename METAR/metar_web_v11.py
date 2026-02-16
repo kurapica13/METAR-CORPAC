@@ -24,6 +24,7 @@ from pathlib import Path
 import re
 import os
 from io import BytesIO
+from decimal import Decimal, ROUND_HALF_UP
 
 # ============================================
 # CONFIGURACIÓN DE PÁGINA
@@ -132,6 +133,19 @@ st.markdown("""
 # ============================================
 # FUNCIONES DE GESTIÓN DE ARCHIVOS
 # ============================================
+def redondear_metar(valor):
+    """
+    Redondeo tradicional para METAR:
+    - 14.5 → 15
+    - 14.4 → 14
+    - 15.5 → 16
+    """
+    try:
+        d = Decimal(str(valor))
+        return int(d.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    except:
+        return int(round(float(valor))) 
+        
 def obtener_nombre_archivo_mensual():
     """Genera el nombre del archivo mensual basado en la fecha actual UTC"""
     ahora = datetime.now(timezone.utc)
@@ -783,8 +797,8 @@ def generar_metar(datos):
         
         # ===== CORRECCIÓN: Temperatura y Rocío con MISMA LÓGICA =====
         # Ambos se redondean igual (temperatura del aire y punto de rocío)
-        temp_metar = int(round(temp))
-        rocio_metar = int(round(rocio))
+        temp_metar = redondear_metar(temp)
+        rocio_metar = redondear_metar(rocio)
         qnh_metar = int(qnh)
         # ===========================================================
         
