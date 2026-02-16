@@ -28,7 +28,7 @@ from io import BytesIO
 # CONFIGURACIÓN DE PÁGINA
 # ============================================
 st.set_page_config(
-    page_title="METAR Digital - CORPAC Perú",
+    page_title="REGISTRO DE OBSERVACIONES ORDINARIAS Y ESPECIALES",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="collapsed"
