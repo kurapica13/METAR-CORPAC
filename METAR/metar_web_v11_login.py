@@ -886,7 +886,7 @@ def generar_metar(datos):
                 raise ValueError(vis_min_error)
         
         rvr_codigo = procesar_rvr(datos['rvr'])
-        fenomeno = codificar_fenomenos(datos['fenomeno'])
+        fenomeno = codificar_fenomenos(datos['fenomeno'], vis_m)
         nubes = interpretar_nubes(datos['nubes'], vis_m, fenomeno)
         
         temp = validar_numero(datos['temp'], -10, 40, "Temperatura")
