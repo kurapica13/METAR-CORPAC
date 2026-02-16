@@ -576,36 +576,37 @@ def procesar_rvr(rvr_texto):
 def codificar_fenomenos(texto):
     """
     CODIFICADOR DE FENÓMENOS - VERSIÓN CORREGIDA
-    Ahora puede combinar múltiples fenómenos (hasta 3 o más)
-    Ejemplo: "niebla parcial, lluvia moderada, tormenta" → "PRFG RA TS"
+    Orden correcto: primero precipitaciones, luego oscurecimiento
+    Ejemplo: "niebla parcial, lluvia moderada" → "RA PRFG" (no "PRFG RA")
     """
     if not texto:
         return ""
     
     texto_lower = texto.lower().strip()
-    resultados = []
+    precipitaciones = []
+    oscurecimiento = []
+    especiales = []
     
     # ============================================
-    # PASO 1: Detectar fenómenos especiales de niebla
+    # PASO 1: Detectar fenómenos especiales de niebla (PRFG, VCFG, BCFG, MIFG)
     # ============================================
     if any(x in texto_lower for x in ["niebla parcial", "prfg", "pr fg", "parcial"]):
-        resultados.append("PRFG")
-        # Eliminar estas palabras para no procesarlas de nuevo
+        especiales.append("PRFG")
         for palabra in ["niebla parcial", "prfg", "pr fg", "parcial"]:
             texto_lower = texto_lower.replace(palabra, "")
     
     if any(x in texto_lower for x in ["niebla en la vecindad", "vcfg", "vc fg", "vecindad"]):
-        resultados.append("VCFG")
+        especiales.append("VCFG")
         for palabra in ["niebla en la vecindad", "vcfg", "vc fg", "vecindad"]:
             texto_lower = texto_lower.replace(palabra, "")
     
     if any(x in texto_lower for x in ["niebla en bancos", "bcfg", "bc fg", "bancos"]):
-        resultados.append("BCFG")
+        especiales.append("BCFG")
         for palabra in ["niebla en bancos", "bcfg", "bc fg", "bancos"]:
             texto_lower = texto_lower.replace(palabra, "")
     
     if any(x in texto_lower for x in ["niebla baja", "mifg", "mi fg", "baja"]):
-        resultados.append("MIFG")
+        especiales.append("MIFG")
         for palabra in ["niebla baja", "mifg", "mi fg", "baja"]:
             texto_lower = texto_lower.replace(palabra, "")
     
@@ -624,12 +625,21 @@ def codificar_fenomenos(texto):
         "fz": "FZ", "helada": "FZ", "congelante": "FZ", "congelando": "FZ"
     }
     
-    fenomenos = {
-        "lluvia": "RA", "llovizna": "DZ", "niebla": "FG", "neblina": "BR",
-        "nieve": "SN", "granizo": "GR", "cellisca": "GS", 
-        "tormenta": "TS", "tormentas": "TS",
-        "polvo": "DU", "arena": "SA", "humo": "FU", "ceniza": "VA", "calima": "HZ",
-        "trueno": "TS", "relámpago": "TS", "rayo": "TS"
+    # Fenómenos de precipitación
+    precipitacion_map = {
+        "lluvia": "RA", "llovizna": "DZ", "nieve": "SN", 
+        "granizo": "GR", "cellisca": "GS", "pr": "RA"  # "pr" para precipitation
+    }
+    
+    # Fenómenos de oscurecimiento
+    oscurecimiento_map = {
+        "niebla": "FG", "neblina": "BR", "calima": "HZ",
+        "humo": "FU", "polvo": "DU", "arena": "SA", "ceniza": "VA"
+    }
+    
+    # Otros fenómenos (tormentas van aparte)
+    tormenta_map = {
+        "tormenta": "TS", "tormentas": "TS", "trueno": "TS", "relámpago": "TS"
     }
     
     # Dividir por comas, puntos y comas, o la palabra "y"
@@ -637,63 +647,95 @@ def codificar_fenomenos(texto):
     texto_lower = re.sub(r'\s+y\s+', ', ', texto_lower)  # Reemplazar " y " por ", "
     partes = re.split(r'[,;]', texto_lower)
     
-    contador_fenomenos = 0
     for parte in partes:
-        if contador_fenomenos >= 3:  # Límite de 3 fenómenos
-            break
-            
         parte = parte.strip()
         if not parte:
             continue
         
-        # Buscar en esta parte
-        codigo_encontrado = None
-        descriptor_encontrado = ""
-        intensidad_encontrada = ""
+        # Variables para esta parte
+        codigo_base = None
+        descriptor = ""
+        intensidad = ""
+        tipo_fenomeno = None  # 'precipitacion', 'oscurecimiento', 'tormenta'
         parte_procesada = parte
         
-        # Detectar descriptor
+        # Detectar descriptor (TS, SH, FZ)
         for d_texto, d_codigo in descriptores.items():
             if d_texto in parte_procesada:
-                descriptor_encontrado = d_codigo
+                descriptor = d_codigo
                 parte_procesada = parte_procesada.replace(d_texto, "").strip()
                 break
         
         # Detectar intensidad
         for i_texto, i_codigo in intensidades.items():
             if i_texto in parte_procesada:
-                intensidad_encontrada = i_codigo
+                intensidad = i_codigo
                 parte_procesada = parte_procesada.replace(i_texto, "").strip()
                 break
         
-        # Detectar fenómeno
-        for f_texto, f_codigo in fenomenos.items():
+        # Detectar tormenta primero (va al final normalmente)
+        for f_texto, f_codigo in tormenta_map.items():
             if f_texto in parte_procesada:
-                codigo_encontrado = f_codigo
+                codigo_base = f_codigo
+                tipo_fenomeno = 'tormenta'
                 break
         
+        # Si no es tormenta, buscar precipitación
+        if not codigo_base:
+            for f_texto, f_codigo in precipitacion_map.items():
+                if f_texto in parte_procesada:
+                    codigo_base = f_codigo
+                    tipo_fenomeno = 'precipitacion'
+                    break
+        
+        # Si no es precipitación, buscar oscurecimiento
+        if not codigo_base:
+            for f_texto, f_codigo in oscurecimiento_map.items():
+                if f_texto in parte_procesada:
+                    codigo_base = f_codigo
+                    tipo_fenomeno = 'oscurecimiento'
+                    break
+        
         # Si encontramos un fenómeno, construir el código
-        if codigo_encontrado:
-            codigo_final = codigo_encontrado
-            if descriptor_encontrado:
-                codigo_final = descriptor_encontrado + codigo_final
-            if intensidad_encontrada:
-                codigo_final = intensidad_encontrada + codigo_final
+        if codigo_base:
+            codigo_final = codigo_base
+            if descriptor and codigo_base != "TS":  # TS ya incluye el descriptor
+                codigo_final = descriptor + codigo_final
+            if intensidad:
+                codigo_final = intensidad + codigo_final
             
-            # Evitar duplicados exactos
-            if codigo_final not in resultados:
-                resultados.append(codigo_final)
-                contador_fenomenos += 1
+            # Clasificar según tipo
+            if tipo_fenomeno == 'precipitacion':
+                if codigo_final not in precipitaciones:
+                    precipitaciones.append(codigo_final)
+            elif tipo_fenomeno == 'oscurecimiento':
+                if codigo_final not in oscurecimiento:
+                    oscurecimiento.append(codigo_final)
+            elif tipo_fenomeno == 'tormenta':
+                # Las tormentas pueden ir al final o donde corresponde
+                if codigo_final not in precipitaciones and codigo_final not in oscurecimiento:
+                    # Si es TS sola, va como precipitación
+                    precipitaciones.append(codigo_final)
     
     # ============================================
-    # PASO 3: Unir todos los resultados (máximo 3)
+    # PASO 3: Ordenar correctamente
     # ============================================
-    if resultados:
-        # Limitar a 3 fenómenos (lo usual en METAR)
-        resultados_finales = resultados[:3]
-        return " ".join(resultados_finales)
-    else:
-        return ""
+    resultados_finales = []
+    
+    # Primero precipitaciones
+    resultados_finales.extend(precipitaciones)
+    
+    # Luego fenómenos especiales (PRFG, VCFG, etc.) - van después de precipitaciones
+    resultados_finales.extend(especiales)
+    
+    # Finalmente oscurecimiento (FG, BR, HZ)
+    resultados_finales.extend(oscurecimiento)
+    
+    # Limitar a 3 fenómenos
+    if len(resultados_finales) > 3:
+        resultados_finales = resultados_finales[:3]
+    
+    return " ".join(resultados_finales) if resultados_finales else ""
 
 # ============================================
 # FUNCIONES DE PROCESAMIENTO - NUBES
