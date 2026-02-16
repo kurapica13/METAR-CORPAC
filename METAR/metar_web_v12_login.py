@@ -783,17 +783,23 @@ def interpretar_nubes(texto, vis_m, fenomeno):
     if not texto:
         texto = ""
     
-    texto = texto.strip().upper()
+     texto = texto.strip().upper()
     
-    # ===== CASO ESPECIAL: Visibilidad Vertical (VV) =====
-    if any(x in texto.upper() for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
+    # ===== CASO ESPECIAL: Visibilidad Vertical (VV) - CORREGIDO =====
+    if any(x in texto for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
         import re
         numeros = re.findall(r'\d+', texto)
         if numeros:
             altura_metros = int(numeros[0])
-            altura_pies = int(altura_metros/0.333)
-            altura_cientos = altura_pies // 100
+            # Convertir metros a pies (1 metro = 3.28084 pies)
+            altura_pies = altura_metros * 3.28084
+            # Redondear al entero más cercano
+            altura_pies_redondeados = int(round(altura_pies))
+            # Convertir a cientos de pies
+            altura_cientos = altura_pies_redondeados // 100
+            # Asegurar que está en rango
             altura_cientos = min(max(altura_cientos, 0), 999)
+            # Formatear con 3 dígitos
             return f"VV{altura_cientos:03d}"
     return "VV///"
     # ===================================================
