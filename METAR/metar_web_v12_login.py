@@ -773,20 +773,20 @@ def interpretar_nubes(texto, vis_m, fenomeno):
     """
     CODIFICADOR DE NUBES - ESTÁNDAR CORPAC
     - Convierte texto claro a código METAR
-    - Soporta Visibilidad Vertical (VV) cuando se menciona como "vis ver"
-    - CAVOK solo cuando NO hay nubes Y visibilidad ≥ 10km Y sin fenómenos
-    - Ejemplos:
-      "8 ST 300M" → "OVC010"
-      "5 CU 1500M" → "SCT050"
-      "vis ver 600M" → "VV020"
+    - Soporta Visibilidad Vertical (VV) con regla: metros ÷ 30 = cientos de pies
+    - Soporta VV/// cuando la altura es desconocida
     """
     if not texto:
         texto = ""
     
     texto = texto.strip().upper()
     
-    # ===== CASO ESPECIAL: Visibilidad Vertical (VV) - CORREGIDO =====
+    # ===== CASO ESPECIAL: Visibilidad Vertical (VV) =====
     if any(x in texto for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
+        # Caso especial: VV/// (altura desconocida)
+        if "///" in texto or "//" in texto:
+            return "VV///"
+        
         import re
         numeros = re.findall(r'\d+', texto)
         if numeros:
@@ -795,14 +795,9 @@ def interpretar_nubes(texto, vis_m, fenomeno):
             altura_cientos = round(altura_metros / 30)
             altura_cientos = min(max(altura_cientos, 0), 999)
             return f"VV{altura_cientos:03d}"
-    return "VV///"
     # ===================================================
     
     # ===== VERIFICAR CAVOK =====
-    # CAVOK solo si:
-    # 1. Visibilidad ≥ 10km
-    # 2. Sin fenómenos
-    # 3. Sin nubes (texto vacío o NSC/SKC/CLR)
     if vis_m >= 9999 and not fenomeno.strip():
         if not texto or texto in ["NSC", "SKC", "CLR", "DESPEJADO", "SIN NUBES", "NO NUBES"]:
             return "CAVOK"
