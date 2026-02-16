@@ -1000,23 +1000,7 @@ def generar_metar(datos):
         
         rvr_codigo = procesar_rvr(datos['rvr'])
         fenomeno = codificar_fenomenos(datos['fenomeno'], vis_m)
-        # Calcular nubes
         nubes = interpretar_nubes(datos['nubes'], vis_m, fenomeno)
-
-        # Verificar CAVOK (esto ahora funcionará correctamente)
-        es_cavok = verificar_cavok(vis_m, fenomeno, nubes)
-        
-        if es_cavok:
-            metar_parts.append("CAVOK")
-        else:
-            metar_parts.append(f"{vis_m:04d}")
-            if vis_min_codigo:
-                metar_parts.append(vis_min_codigo)
-            if rvr_codigo:
-                metar_parts.append(rvr_codigo)
-            if fenomeno:
-                metar_parts.append(fenomeno)
-            metar_parts.append(nubes)  # Aquí va NSC u otras nubes
         
         temp = validar_numero(datos['temp'], -10, 40, "Temperatura")
         rocio = validar_numero(datos['rocio'], -10, 40, "Punto de rocío")
@@ -1027,11 +1011,12 @@ def generar_metar(datos):
         rocio_metar = redondear_metar(rocio)
         qnh_metar = redondear_metar(qnh)
         
-        es_cavok = verificar_cavok(vis_m, fenomeno, nubes)
-        
+        # ===== DEFINIR metar_parts ANTES DE USARLO =====
         metar_parts = [f"{datos['tipo']} SPJC {datos['dia']}{hora}Z {viento}"]
+        # ==============================================
         
-        if es_cavok:
+        # Si nubes es CAVOK, usamos CAVOK
+        if nubes == "CAVOK":
             metar_parts.append("CAVOK")
         else:
             metar_parts.append(f"{vis_m:04d}")
@@ -1064,7 +1049,7 @@ def generar_metar(datos):
             'Fenómeno_Texto': datos['fenomeno'],
             'Fenómeno_Código': fenomeno,
             'Nubes_Texto': datos['nubes'],
-            'Nubes_Código': "CAVOK" if es_cavok else nubes,
+            'Nubes_Código': "CAVOK" if nubes == "CAVOK" else nubes,
             'Temperatura': temp,
             'Punto_Rocío': rocio,
             'Humedad_Relativa_%': datos['hr'] if datos['hr'] else "",
@@ -1074,10 +1059,17 @@ def generar_metar(datos):
             'METAR_Completo': metar_completo
         }
         
-        return {'success': True, 'metar': metar_completo, 'registro': registro}
+        return {
+            'success': True,
+            'metar': metar_completo,
+            'registro': registro
+        }
         
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 # ============================================
 # FUNCIÓN PARA EXPORTAR EXCEL
