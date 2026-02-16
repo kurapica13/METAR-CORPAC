@@ -386,10 +386,12 @@ def procesar_viento(direccion, intensidad, variacion):
     Caso 1: Variación ≥60° y <180° con viento <3kt → VRBxxKT
     Caso 2: Variación ≥60° y <180° con viento ≥3kt → dddffKT bbbVnnn
     Caso 3: Variación ≥180° → VRBxxKT
+    Caso 4: Variación <60° → NO se incluye en el METAR final
     """
     dir_int = int(direccion)
     intensidad_str = str(intensidad).upper().strip()
     
+    # Procesar ráfagas
     if 'G' in intensidad_str:
         if 'G' in intensidad_str and not ' ' in intensidad_str.replace('G', ''):
             base_int, gust_int = intensidad_str.split('G')
@@ -405,37 +407,49 @@ def procesar_viento(direccion, intensidad, variacion):
         int_base = int(intensidad_str)
         intensidad_metar = f"{int_base:02d}"
     
+    # Si NO hay variación
     if not variacion:
         return f"{dir_int:03d}{intensidad_metar}KT"
     
     try:
+        # Extraer valores de variación (formato: bbbVnnn)
         variacion = variacion.upper().replace(' ', '')
         if 'V' not in variacion:
             return f"{dir_int:03d}{intensidad_metar}KT"
         
         desde, hasta = map(int, variacion.split('V'))
         
+        # Calcular diferencia CIRCULAR
         diff1 = abs(hasta - desde)
         diff2 = 360 - diff1
         diferencia = min(diff1, diff2)
         
+        # CASO 4: Variación < 60° - NO incluir en METAR
+        if diferencia < 60:
+            return f"{dir_int:03d}{intensidad_metar}KT"
+        
+        # CASO 3: Variación ≥ 180°
         if diferencia >= 180:
             return f"VRB{intensidad_metar}KT"
         
+        # CASO 1 y 2: Variación ≥ 60° y < 180°
         if diferencia >= 60:
             if int_base < 3:
+                # CASO 1: Viento < 3kt
                 return f"VRB{intensidad_metar}KT"
             else:
+                # CASO 2: Viento ≥ 3kt
                 if diff1 <= 180:
                     return f"{dir_int:03d}{intensidad_metar}KT {desde:03d}V{hasta:03d}"
                 else:
+                    # Para casos como 340V080, mostrar como 080V340
                     return f"{dir_int:03d}{intensidad_metar}KT {hasta:03d}V{desde:03d}"
         
-        return f"{dir_int:03d}{intensidad_metar}KT {variacion}"
+        return f"{dir_int:03d}{intensidad_metar}KT"
         
     except Exception as e:
         return f"{dir_int:03d}{intensidad_metar}KT"
-
+        
 # ============================================
 # FUNCIONES DE PROCESAMIENTO - VISIBILIDAD
 # ============================================
@@ -793,7 +807,7 @@ def generar_metar(datos):
                 metar_parts.append(fenomeno)
             metar_parts.append(nubes)
         
-        metar_parts.append(f"{round(temp):02d}/{round(rocio):02d} Q{round(qnh)}")
+        metar_parts.append(f"{int(round(temp)):02d}/{int(round(rocio)):02d} Q{int(round(qnh))}")
         
         if datos['suplementaria']:
             metar_parts.append(datos['suplementaria'].upper())
