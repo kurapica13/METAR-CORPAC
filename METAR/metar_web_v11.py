@@ -584,7 +584,7 @@ def codificar_fenomenos(texto):
         return "PRFG"
     if any(x in texto_lower for x in ["niebla en la vecindad", "vcfg", "vc fg", "vecindad"]):
         return "VCFG"
-    if any(x in texto_lower for x in ["niebla en bancos", "bcfg", "bc fg", "bancos"]):
+    if any(x in texto_lower for x in ["bancos de niebla", "bcfg", "bc fg", "bancos"]):
         return "BCFG"
     if any(x in texto_lower for x in ["niebla baja", "mifg", "mi fg", "baja"]):
         return "MIFG"
@@ -597,7 +597,7 @@ def codificar_fenomenos(texto):
     
     fenomenos = {
         "lluvia": "RA", "llovizna": "DZ", "niebla": "FG", "neblina": "BR",
-        "nieve": "SN", "granizo": "GR", "cellisca": "GS", "tormenta": "TS",
+        "nieve": "SN", "granizo": "GR","tormenta": "TS",
         "polvo": "DU", "arena": "SA", "humo": "FU", "ceniza": "VA", "calima": "HZ"
     }
     
