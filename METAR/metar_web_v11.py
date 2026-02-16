@@ -1333,7 +1333,7 @@ with col_der:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p>METAR Digital - CORPAC Peru | Aeropuerto Internacional Jorge Chavez (SPJC)</p>
+    <p>CORPAC Peru | Aeropuerto Internacional Jorge Chavez (SPJC)</p>
 </div>
 """, unsafe_allow_html=True)
 
