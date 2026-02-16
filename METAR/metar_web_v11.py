@@ -1278,7 +1278,7 @@ with col_der:
     # BOTÓN DE EXPORTACIÓN
     st.markdown("<div class='section-title'>EXPORTAR</div>", unsafe_allow_html=True)
     
-    if st.button("📥 Exportar METAR", use_container_width=True, type="primary"):
+    if st.button("📥 Exportar METAR/SPECI", use_container_width=True, type="primary"):
         if st.session_state.registros:
             excel_file, mensaje = exportar_a_excel(st.session_state.registros)
             if excel_file:
