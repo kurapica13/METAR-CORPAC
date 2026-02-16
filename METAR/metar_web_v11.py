@@ -436,7 +436,10 @@ def procesar_viento(direccion, intensidad, variacion):
         # Calcular diferencia CIRCULAR
         diff1 = abs(hasta - desde)
         diff2 = 360 - diff1
-        diferencia = min(diff1, diff2)
+        if desde > hasta:
+            diferencia = diff2
+        else:
+            diferencia = diff1 
         
         # CASO 4: Variación < 60° - NO incluir en METAR
         if diferencia < 60:
