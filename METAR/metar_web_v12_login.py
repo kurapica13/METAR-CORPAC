@@ -791,7 +791,7 @@ def interpretar_nubes(texto, vis_m, fenomeno):
         numeros = re.findall(r'\d+', texto)
         if numeros:
             altura_metros = int(numeros[0])
-            altura_pies = int(altura_metros/0.303)
+            altura_pies = int(altura_metros/0.333)
             altura_cientos = altura_pies // 100
             altura_cientos = min(max(altura_cientos, 0), 999)
             return f"VV{altura_cientos:03d}"
