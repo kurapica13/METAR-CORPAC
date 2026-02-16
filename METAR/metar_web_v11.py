@@ -785,7 +785,7 @@ def generar_metar(datos):
         # Ambos se redondean igual (temperatura del aire y punto de rocío)
         temp_metar = int(round(temp))
         rocio_metar = int(round(rocio))
-        qnh_metar = int(round(qnh))
+        qnh_metar = int(qnh)
         # ===========================================================
         
         es_cavok = verificar_cavok(vis_m, fenomeno, nubes)
