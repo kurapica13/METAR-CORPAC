@@ -954,162 +954,46 @@ def generar_metar(datos):
 # FUNCIÓN PARA EXPORTAR EXCEL
 # ============================================
 def exportar_a_excel(registros):
-    """Genera un archivo Excel para descargar"""
+    """Genera un archivo Excel - VERSIÓN ULTRA SIMPLE"""
     if not registros:
         return None, "No hay registros para exportar"
     
     try:
-        # Convertir a DataFrame
+        # Crear DataFrame
         df = pd.DataFrame(registros)
         
-        # ===== CORRECCIÓN: Manejar valores nulos =====
-        df = df.fillna('')
+        # ===== CORRECCIÓN: Crear columnas DIA y HORA sin usar .str =====
+        datos_exportar = []
+        for r in registros:
+            dia = str(r.get('Día', '')).zfill(2)
+            hora = str(r.get('Hora', '')).zfill(4)
+            
+            datos_exportar.append({
+                'DIA': dia,
+                'HORA': hora,
+                'TIPO': r.get('Tipo', ''),
+                'METAR': r.get('METAR_Completo', ''),
+                'TEMP': r.get('Temperatura', ''),
+                'ROCIO': r.get('Punto_Rocío', ''),
+                'QNH': r.get('QNH', ''),
+                'VIENTO DIR': r.get('Dirección_Viento', ''),
+                'VIENTO INT': r.get('Intensidad_Viento', ''),
+                'RVR': r.get('RVR', ''),
+                'WX': r.get('Fenómeno_Código', '')
+            })
+        # ==============================================================
         
-        # ===== CORRECCIÓN: Convertir columnas a string ANTES de usar .str =====
-        if 'Día' in df.columns:
-            df['Día'] = df['Día'].astype(str)
-        if 'Hora' in df.columns:
-            df['Hora'] = df['Hora'].astype(str)
-        if 'Tipo' in df.columns:
-            df['Tipo'] = df['Tipo'].astype(str)
-        # =============================================
+        df_nuevo = pd.DataFrame(datos_exportar)
         
-        # Renombrar columnas
-        df = df.rename(columns={
-            'Día': 'DIA',
-            'Hora': 'HORA',
-            'Tipo': 'TIPO',
-            'Dirección_Viento': 'DIR VIENTO',
-            'Intensidad_Viento': 'INTENSIDAD',
-            'Variación_Viento': 'VARIACION',
-            'Visibilidad_Original': 'VIS (ORIGINAL)',
-            'Visibilidad_Metros': 'VIS (CODIGO)',
-            'Visibilidad_Mínima': 'VIS MIN',
-            'RVR': 'RVR',
-            'Fenómeno_Texto': 'FENOMENO',
-            'Fenómeno_Código': 'WX',
-            'Nubes_Texto': 'NUBOSIDAD',
-            'Nubes_Código': 'CLD',
-            'Temperatura': 'TEMP °C',
-            'Punto_Rocío': 'ROCÍO °C',
-            'Humedad_Relativa_%': 'HR %',
-            'QNH': 'QNH',
-            'Presión_Estación': 'PRESION',
-            'Info_Suplementaria': 'RMK',
-            'METAR_Completo': 'METAR'
-        })
-        
-        columnas_excel = [
-            'DIA', 'HORA', 'TIPO', 'DIR VIENTO', 'INTENSIDAD', 'VARIACION',
-            'VIS (ORIGINAL)', 'VIS (CODIGO)', 'VIS MIN', 'RVR',
-            'FENOMENO', 'WX', 'NUBOSIDAD', 'CLD',
-            'TEMP °C', 'ROCÍO °C', 'HR %', 'QNH', 'PRESION', 'RMK', 'METAR'
-        ]
-        
-        # ===== CORRECCIÓN: Solo usar columnas que existen =====
-        columnas_disponibles = []
-        for col in columnas_excel:
-            if col in df.columns:
-                columnas_disponibles.append(col)
-        
-        if columnas_disponibles:
-            df = df[columnas_disponibles]
-        
-        # ===== CORRECCIÓN: Formatear DÍA y HORA con .str solo después de asegurar que son string =====
-        if 'DIA' in df.columns:
-            df['DIA'] = df['DIA'].astype(str).str.zfill(2)
-        if 'HORA' in df.columns:
-            df['HORA'] = df['HORA'].astype(str).str.zfill(4)
-        # ===========================================================================================
-        
-        # Ordenar
-        if 'DIA' in df.columns and 'HORA' in df.columns:
-            df = df.sort_values(['DIA', 'HORA'], ascending=[True, True])
-        
-        # Crear archivo Excel
+        # Exportar a Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='METAR SPJC', index=False)
-            
-            # ===== CORRECCIÓN: Solo aplicar formato si hay columnas =====
-            if len(columnas_disponibles) > 0:
-                workbook = writer.book
-                worksheet = writer.sheets['METAR SPJC']
-                
-                from openpyxl.utils import get_column_letter
-                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-                
-                # Ancho de columnas
-                for col in range(1, len(columnas_disponibles) + 1):
-                    column_letter = get_column_letter(col)
-                    col_name = columnas_disponibles[col-1]
-                    
-                    header_cell = worksheet.cell(row=1, column=col)
-                    max_length = len(str(header_cell.value)) if header_cell.value else 0
-                    
-                    for row in range(2, min(len(df) + 2, 1002)):
-                        cell = worksheet.cell(row=row, column=col)
-                        if cell.value:
-                            cell_length = len(str(cell.value))
-                            if cell_length > max_length:
-                                max_length = cell_length
-                    
-                    if col_name == 'METAR':
-                        adjusted_width = min(max_length + 5, 120)
-                    else:
-                        adjusted_width = min(max_length + 2, 50)
-                    
-                    worksheet.column_dimensions[column_letter].width = max(adjusted_width, 8)
-                
-                # Estilos del encabezado
-                header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-                header_fill = PatternFill(start_color='0B3D91', end_color='0B3D91', fill_type='solid')
-                header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                
-                for col in range(1, len(columnas_disponibles) + 1):
-                    cell = worksheet.cell(row=1, column=col)
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = header_align
-                
-                worksheet.row_dimensions[1].height = 30
-                
-                # Bordes
-                border = Border(
-                    left=Side(style='thin', color='CCCCCC'),
-                    right=Side(style='thin', color='CCCCCC'),
-                    top=Side(style='thin', color='CCCCCC'),
-                    bottom=Side(style='thin', color='CCCCCC')
-                )
-                
-                # Formato de datos
-                for row in range(2, len(df) + 2):
-                    tipo_reporte = worksheet.cell(row=row, column=3).value
-                    for col in range(1, len(columnas_disponibles) + 1):
-                        cell = worksheet.cell(row=row, column=col)
-                        cell.border = border
-                        
-                        if tipo_reporte == 'SPECI':
-                            cell.fill = PatternFill(start_color='FFE699', end_color='FFE699', fill_type='solid')
-                            cell.font = Font(name='Calibri', size=10, bold=True)
-                        else:
-                            cell.font = Font(name='Calibri', size=10)
-                        
-                        col_name = columnas_disponibles[col-1]
-                        if col_name == 'METAR':
-                            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-                        else:
-                            cell.alignment = Alignment(horizontal='center', vertical='center')
-                
-                worksheet.freeze_panes = 'A2'
+            df_nuevo.to_excel(writer, sheet_name='METAR SPJC', index=False)
         
         output.seek(0)
         return output, f"✅ {len(registros)} registros exportados"
         
     except Exception as e:
-        import traceback
-        error_detallado = traceback.format_exc()
-        print(error_detallado)
         return None, f"Error al exportar: {str(e)}"
 
 # ============================================
