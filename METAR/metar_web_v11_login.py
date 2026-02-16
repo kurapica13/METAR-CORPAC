@@ -894,6 +894,32 @@ def interpretar_nubes(texto, vis_m, fenomeno):
     
     return " ".join(codigos_nubes[:4]) if codigos_nubes else "NSC"
 
+def verificar_cavok(vis_m, fenomeno, nubes):
+    """
+    Verifica si se cumplen las condiciones para reportar CAVOK
+    CAVOK = Ceiling And Visibility OK (Techo y Visibilidad OK)
+    
+    Condiciones:
+    - Visibilidad ≥ 10 km (9999 en código METAR)
+    - Sin fenómenos significativos
+    - Sin nubes por debajo de 5000 pies o sin CB/TCU
+    """
+    # Verificar visibilidad ≥ 10 km
+    if vis_m < 9999:
+        return False
+    
+    # Verificar que no haya fenómenos significativos
+    if fenomeno and fenomeno.strip():
+        return False
+    
+    # Verificar que no haya nubes significativas
+    # Si nubes es NSC o CAVOK, está bien
+    if nubes in ["NSC", "CAVOK"]:
+        return True
+    
+    # Si hay nubes reportadas, no es CAVOK
+    return False
+
 # ============================================
 # FUNCIONES DE VALIDACIÓN
 # ============================================
