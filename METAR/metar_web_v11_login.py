@@ -649,7 +649,13 @@ def procesar_rvr(rvr_texto):
 # ============================================
 # FUNCIÓN DE FENÓMENOS CORREGIDA
 # ============================================
-def codificar_fenomenos(texto):
+def codificar_fenomenos(texto, visibilidad_metros):
+    """
+    CODIFICADOR DE FENÓMENOS - CON REGLAS DE VISIBILIDAD
+    - Si visibilidad < 1000m: "niebla" → FG
+    - Si visibilidad entre 1000m y 5000m: "neblina" → BR
+    - Si visibilidad > 5000m: no se codifica (solo texto claro)
+    """
     if not texto:
         return ""
     
@@ -658,7 +664,9 @@ def codificar_fenomenos(texto):
     oscurecimiento = []
     especiales = []
     
-    # Fenómenos especiales de niebla
+    # ============================================
+    # PASO 1: Detectar fenómenos especiales de niebla (siempre se reportan)
+    # ============================================
     if any(x in texto_lower for x in ["niebla parcial", "prfg", "pr fg", "parcial"]):
         especiales.append("PRFG")
         for palabra in ["niebla parcial", "prfg", "pr fg", "parcial"]:
@@ -679,7 +687,9 @@ def codificar_fenomenos(texto):
         for palabra in ["niebla baja", "mifg", "mi fg", "baja"]:
             texto_lower = texto_lower.replace(palabra, "")
     
-    # Mapas de fenómenos
+    # ============================================
+    # PASO 2: Mapas de fenómenos
+    # ============================================
     intensidades = {
         "ligera": "-", "ligero": "-", "leve": "-", "débil": "-", 
         "moderada": "", "moderado": "",
@@ -697,12 +707,28 @@ def codificar_fenomenos(texto):
         "granizo": "GR", "cellisca": "GS"
     }
     
-    oscurecimiento_map = {
-        "niebla": "FG", "neblina": "BR", "calima": "HZ",
-        "humo": "FU", "polvo": "DU", "arena": "SA", "ceniza": "VA"
-    }
+    # ============================================
+    # PASO 3: Determinar código de oscurecimiento según visibilidad
+    # ============================================
+    def get_oscurecimiento_codigo(texto_parte, vis_m):
+        """Determina si es FG o BR según la visibilidad"""
+        if "neblina" in texto_parte:
+            if vis_m < 1000:
+                return "FG"  # <1000m es niebla
+            elif vis_m <= 5000:
+                return "BR"  # 1000-5000m es neblina
+            else:
+                return None  # >5000m no se codifica
+        elif "niebla" in texto_parte and "parcial" not in texto_parte and "baja" not in texto_parte:
+            if vis_m < 1000:
+                return "FG"
+            else:
+                return None  # Si hay niebla pero visibilidad >1000m, no es válido
+        return None
     
-    # Procesar texto
+    # ============================================
+    # PASO 4: Procesar el texto
+    # ============================================
     import re
     texto_lower = re.sub(r'\s+y\s+', ', ', texto_lower)
     partes = re.split(r'[,;]', texto_lower)
@@ -718,36 +744,40 @@ def codificar_fenomenos(texto):
         tipo = None
         parte_procesada = parte
         
+        # Detectar descriptor
         for d_texto, d_codigo in descriptores.items():
             if d_texto in parte_procesada:
                 descriptor = d_codigo
                 parte_procesada = parte_procesada.replace(d_texto, "").strip()
                 break
         
+        # Detectar intensidad
         for i_texto, i_codigo in intensidades.items():
             if i_texto in parte_procesada:
                 intensidad = i_codigo
                 parte_procesada = parte_procesada.replace(i_texto, "").strip()
                 break
         
+        # Detectar precipitación
         for f_texto, f_codigo in precipitacion_map.items():
             if f_texto in parte_procesada:
                 codigo_base = f_codigo
                 tipo = 'precipitacion'
                 break
         
+        # Detectar oscurecimiento (con reglas de visibilidad)
         if not codigo_base:
-            for f_texto, f_codigo in oscurecimiento_map.items():
-                if f_texto in parte_procesada:
-                    codigo_base = f_codigo
-                    tipo = 'oscurecimiento'
-                    break
+            codigo_osc = get_oscurecimiento_codigo(parte_procesada, visibilidad_metros)
+            if codigo_osc:
+                codigo_base = codigo_osc
+                tipo = 'oscurecimiento'
         
+        # Si encontramos un fenómeno, construir el código
         if codigo_base:
             codigo_final = codigo_base
-            if descriptor and codigo_base != "TS":
+            if descriptor and codigo_base not in ["FG", "BR"]:  # No agregar descriptores a FG/BR
                 codigo_final = descriptor + codigo_final
-            if intensidad:
+            if intensidad and codigo_base not in ["FG", "BR"]:  # No agregar intensidad a FG/BR
                 codigo_final = intensidad + codigo_final
             
             if tipo == 'precipitacion' and codigo_final not in precipitaciones:
@@ -755,7 +785,9 @@ def codificar_fenomenos(texto):
             elif tipo == 'oscurecimiento' and codigo_final not in oscurecimiento:
                 oscurecimiento.append(codigo_final)
     
-    # Ordenar: precipitaciones → especiales → oscurecimiento
+    # ============================================
+    # PASO 5: Ordenar resultados
+    # ============================================
     resultados = precipitaciones + especiales + oscurecimiento
     return " ".join(resultados[:3]) if resultados else ""
 
