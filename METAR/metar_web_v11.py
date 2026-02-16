@@ -1334,8 +1334,6 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p>METAR Digital - CORPAC Peru | Aeropuerto Internacional Jorge Chavez (SPJC)</p>
-    <p style='font-size: 0.8rem;'>RVR: Copiar exactamente del AWOS - Formato: R32/0400, R12R/1700, R10/M0050, R14L/P2000</p>
-    <p style='font-size: 0.8rem; color: #0b3d91;'>✓ Viento corregido (no muestra variación <60°) ✓ Temperatura y Rocío redondeados igual</p>
 </div>
 """, unsafe_allow_html=True)
 
