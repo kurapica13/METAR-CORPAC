@@ -488,9 +488,19 @@ def actualizar_o_insertar_registro(registros, nuevo_registro):
 # FUNCIONES DE PROCESAMIENTO - VIENTO (CORREGIDO)
 # ============================================
 def procesar_viento(direccion, intensidad, variacion):
+    """
+    PROCESAMIENTO DE VIENTO - REGLAS CORPAC PERÚ
+    Caso especial: Dirección 000 e intensidad 00 → 00000KT (ignorar variación)
+    """
     dir_int = int(direccion)
     intensidad_str = str(intensidad).upper().strip()
     
+    # ===== CASO ESPECIAL: Viento en calma =====
+    if dir_int == 0 and intensidad_str == "00":
+        return "00000KT"
+    # ==========================================
+    
+    # Procesar ráfagas
     if 'G' in intensidad_str:
         if 'G' in intensidad_str and not ' ' in intensidad_str.replace('G', ''):
             base_int, gust_int = intensidad_str.split('G')
@@ -506,16 +516,19 @@ def procesar_viento(direccion, intensidad, variacion):
         int_base = int(intensidad_str)
         intensidad_metar = f"{int_base:02d}"
     
+    # Si NO hay variación
     if not variacion:
         return f"{dir_int:03d}{intensidad_metar}KT"
     
     try:
+        # Extraer valores de variación (formato: bbbVnnn)
         variacion = variacion.upper().replace(' ', '')
         if 'V' not in variacion:
             return f"{dir_int:03d}{intensidad_metar}KT"
         
         desde, hasta = map(int, variacion.split('V'))
         
+        # Calcular diferencia circular
         diff1 = abs(hasta - desde)
         diff2 = 360 - diff1
         
@@ -1087,7 +1100,7 @@ with col_izq:
         st.markdown("---")
         
         st.markdown("<div class='section-title'>TEMPERATURA Y PRESION</div>", unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             temp = st.text_input("Temp °C", key='temp', help="-10 a 40C")
         with col2:
@@ -1096,12 +1109,14 @@ with col_izq:
             qnh = st.text_input("QNH hPa", key='qnh', help="850-1100 hPa")
         with col4:
             hr = st.text_input("HR %", key='hr', help="Opcional")
+        with col5
+            presion = st.text_input("Presion Estacion (opcional)", key='presion')
         
         st.markdown("---")
         
         st.markdown("<div class='section-title'>INFORMACION SUPLEMENTARIA</div>", unsafe_allow_html=True)
         suplementaria = st.text_input("", key='suplementaria', help="Ej: NOSIG RMK PP000")
-        presion = st.text_input("Presion Estacion (opcional)", key='presion')
+        
         
         st.markdown("---")
         
