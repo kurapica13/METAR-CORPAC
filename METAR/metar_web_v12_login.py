@@ -783,7 +783,7 @@ def interpretar_nubes(texto, vis_m, fenomeno):
     if not texto:
         texto = ""
     
-     texto = texto.strip().upper()
+    texto = texto.strip().upper()
     
     # ===== CASO ESPECIAL: Visibilidad Vertical (VV) - CORREGIDO =====
     if any(x in texto for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
