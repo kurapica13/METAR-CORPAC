@@ -1085,7 +1085,7 @@ def exportar_a_excel(registros):
     except Exception as e:
         import traceback
         print(traceback.format_exc())  # Para debugging
-        return None, f"Error al exportar: {str(e)}
+        return None, f"Error al exportar: {str(e)}"
 
 # ============================================
 # HEADER
