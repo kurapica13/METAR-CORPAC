@@ -961,7 +961,7 @@ def generar_metar(datos):
         
         temp_metar = redondear_metar(temp)
         rocio_metar = redondear_metar(rocio)
-        qnh_metar = redondear_metar(qnh)
+        qnh_metar = int(qnh)
         
         # Construir METAR
         metar_parts = [f"{datos['tipo']} SPJC {datos['dia']}{hora}Z {viento}"]
