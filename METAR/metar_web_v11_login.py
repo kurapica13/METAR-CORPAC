@@ -954,47 +954,138 @@ def generar_metar(datos):
 # FUNCIÓN PARA EXPORTAR EXCEL
 # ============================================
 def exportar_a_excel(registros):
-    """Genera un archivo Excel - VERSIÓN ULTRA SIMPLE"""
+    """Genera un archivo Excel con todas las columnas - VERSIÓN CORREGIDA"""
     if not registros:
         return None, "No hay registros para exportar"
     
     try:
-        # Crear DataFrame
-        df = pd.DataFrame(registros)
-        
-        # ===== CORRECCIÓN: Crear columnas DIA y HORA sin usar .str =====
+        # ===== CREAR NUEVO DATAFRAME MANUALMENTE =====
         datos_exportar = []
         for r in registros:
+            # Formatear DÍA y HORA con Python puro (NO .str)
             dia = str(r.get('Día', '')).zfill(2)
             hora = str(r.get('Hora', '')).zfill(4)
             
+            # Construir fila con TODAS las columnas
             datos_exportar.append({
                 'DIA': dia,
                 'HORA': hora,
                 'TIPO': r.get('Tipo', ''),
-                'METAR': r.get('METAR_Completo', ''),
-                'TEMP': r.get('Temperatura', ''),
-                'ROCIO': r.get('Punto_Rocío', ''),
-                'QNH': r.get('QNH', ''),
-                'VIENTO DIR': r.get('Dirección_Viento', ''),
-                'VIENTO INT': r.get('Intensidad_Viento', ''),
+                'DIR VIENTO': r.get('Dirección_Viento', ''),
+                'INTENSIDAD': r.get('Intensidad_Viento', ''),
+                'VARIACION': r.get('Variación_Viento', ''),
+                'VIS (ORIGINAL)': r.get('Visibilidad_Original', ''),
+                'VIS (CODIGO)': r.get('Visibilidad_Metros', ''),
+                'VIS MIN': r.get('Visibilidad_Mínima', ''),
                 'RVR': r.get('RVR', ''),
-                'WX': r.get('Fenómeno_Código', '')
+                'FENOMENO': r.get('Fenómeno_Texto', ''),
+                'WX': r.get('Fenómeno_Código', ''),
+                'NUBOSIDAD': r.get('Nubes_Texto', ''),
+                'CLD': r.get('Nubes_Código', ''),
+                'TEMP °C': r.get('Temperatura', ''),
+                'ROCÍO °C': r.get('Punto_Rocío', ''),
+                'HR %': r.get('Humedad_Relativa_%', ''),
+                'QNH': r.get('QNH', ''),
+                'PRESION': r.get('Presión_Estación', ''),
+                'RMK': r.get('Info_Suplementaria', ''),
+                'METAR': r.get('METAR_Completo', '')
             })
-        # ==============================================================
         
-        df_nuevo = pd.DataFrame(datos_exportar)
+        # Crear DataFrame con los datos ya formateados
+        df = pd.DataFrame(datos_exportar)
         
-        # Exportar a Excel
+        # Ordenar por DÍA y HORA
+        df = df.sort_values(['DIA', 'HORA'], ascending=[True, True])
+        
+        # ===== EXPORTAR A EXCEL CON FORMATO =====
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_nuevo.to_excel(writer, sheet_name='METAR SPJC', index=False)
+            df.to_excel(writer, sheet_name='METAR SPJC', index=False)
+            
+            # Aplicar formato
+            workbook = writer.book
+            worksheet = writer.sheets['METAR SPJC']
+            
+            from openpyxl.utils import get_column_letter
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            
+            # ===== ANCHO DE COLUMNAS =====
+            for col in range(1, len(df.columns) + 1):
+                column_letter = get_column_letter(col)
+                col_name = df.columns[col-1]
+                
+                # Calcular ancho basado en el contenido
+                max_length = len(str(col_name))
+                for row in range(2, min(len(df) + 2, 100)):
+                    cell_value = df.iloc[row-2, col-1]
+                    if cell_value:
+                        cell_length = len(str(cell_value))
+                        if cell_length > max_length:
+                            max_length = cell_length
+                
+                # Ajustes especiales
+                if col_name == 'METAR':
+                    adjusted_width = min(max_length + 5, 120)
+                elif col_name in ['TEMP °C', 'ROCÍO °C', 'HR %', 'QNH']:
+                    adjusted_width = 12
+                else:
+                    adjusted_width = min(max_length + 2, 50)
+                
+                worksheet.column_dimensions[column_letter].width = max(adjusted_width, 8)
+            
+            # ===== ESTILO DEL ENCABEZADO =====
+            header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+            header_fill = PatternFill(start_color='0B3D91', end_color='0B3D91', fill_type='solid')
+            header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            
+            for col in range(1, len(df.columns) + 1):
+                cell = worksheet.cell(row=1, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_align
+            
+            worksheet.row_dimensions[1].height = 30
+            
+            # ===== BORDES =====
+            border = Border(
+                left=Side(style='thin', color='CCCCCC'),
+                right=Side(style='thin', color='CCCCCC'),
+                top=Side(style='thin', color='CCCCCC'),
+                bottom=Side(style='thin', color='CCCCCC')
+            )
+            
+            # ===== FORMATO DE DATOS =====
+            for row in range(2, len(df) + 2):
+                tipo_reporte = worksheet.cell(row=row, column=3).value  # Columna TIPO
+                
+                for col in range(1, len(df.columns) + 1):
+                    cell = worksheet.cell(row=row, column=col)
+                    cell.border = border
+                    
+                    # Color para SPECI
+                    if tipo_reporte == 'SPECI':
+                        cell.fill = PatternFill(start_color='FFE699', end_color='FFE699', fill_type='solid')
+                        cell.font = Font(name='Calibri', size=10, bold=True)
+                    else:
+                        cell.font = Font(name='Calibri', size=10)
+                    
+                    # Alineación
+                    col_name = df.columns[col-1]
+                    if col_name == 'METAR':
+                        cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                    else:
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            # Congelar primera fila
+            worksheet.freeze_panes = 'A2'
         
         output.seek(0)
         return output, f"✅ {len(registros)} registros exportados"
         
     except Exception as e:
-        return None, f"Error al exportar: {str(e)}"
+        import traceback
+        print(traceback.format_exc())  # Para debugging
+        return None, f"Error al exportar: {str(e)}
 
 # ============================================
 # HEADER
