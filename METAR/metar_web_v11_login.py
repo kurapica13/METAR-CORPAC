@@ -1005,18 +1005,18 @@ def generar_metar(datos):
 
         # Verificar CAVOK (esto ahora funcionará correctamente)
         es_cavok = verificar_cavok(vis_m, fenomeno, nubes)
-
-if es_cavok:
-    metar_parts.append("CAVOK")
-else:
-    metar_parts.append(f"{vis_m:04d}")
-    if vis_min_codigo:
-        metar_parts.append(vis_min_codigo)
-    if rvr_codigo:
-        metar_parts.append(rvr_codigo)
-    if fenomeno:
-        metar_parts.append(fenomeno)
-    metar_parts.append(nubes)  # Aquí va NSC u otras nubes
+        
+        if es_cavok:
+            metar_parts.append("CAVOK")
+        else:
+            metar_parts.append(f"{vis_m:04d}")
+            if vis_min_codigo:
+                metar_parts.append(vis_min_codigo)
+            if rvr_codigo:
+                metar_parts.append(rvr_codigo)
+            if fenomeno:
+                metar_parts.append(fenomeno)
+            metar_parts.append(nubes)  # Aquí va NSC u otras nubes
         
         temp = validar_numero(datos['temp'], -10, 40, "Temperatura")
         rocio = validar_numero(datos['rocio'], -10, 40, "Punto de rocío")
