@@ -786,17 +786,15 @@ def interpretar_nubes(texto, vis_m, fenomeno):
     texto = texto.strip().upper()
     
     # ===== CASO ESPECIAL: Visibilidad Vertical (VV) - CORREGIDO =====
-    if any(x in texto.upper() for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
-    import re
-    numeros = re.findall(r'\d+', texto)
-      if numeros:
-         altura_metros = int(numeros[0])
-         # Regla práctica METAR: metros ÷ 30 = cientos de pies
-         altura_cientos = round(altura_metros / 30)
-         # Asegurar que está en rango (0-999)
-         altura_cientos = min(max(altura_cientos, 0), 999)
-         # Formatear con 3 dígitos
-        return f"VV{altura_cientos:03d}"
+    if any(x in texto for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
+        import re
+        numeros = re.findall(r'\d+', texto)
+        if numeros:
+            altura_metros = int(numeros[0])
+            # Regla práctica METAR: metros ÷ 30 = cientos de pies
+            altura_cientos = round(altura_metros / 30)
+            altura_cientos = min(max(altura_cientos, 0), 999)
+            return f"VV{altura_cientos:03d}"
     # ===================================================
     
     # ===== VERIFICAR CAVOK =====
