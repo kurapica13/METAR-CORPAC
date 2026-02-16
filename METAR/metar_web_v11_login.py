@@ -795,18 +795,104 @@ def codificar_fenomenos(texto, visibilidad_metros):
 # FUNCIONES DE NUBES
 # ============================================
 def interpretar_nubes(texto, vis_m, fenomeno):
+    """
+    CODIFICADOR DE NUBES - ESTÁNDAR CORPAC
+    - Convierte texto claro a código METAR
+    - Soporta Visibilidad Vertical (VV) cuando se menciona como "vis ver"
+    - Ejemplos:
+      "8 ST 300M" → "OVC010"
+      "5 CU 1500M" → "SCT050"
+      "vis ver 600M" → "VV020"
+      "vis ver 300M" → "VV010"
+      "VV 600M" → "VV020" (también acepta VV)
+    """
+    if not texto:
+        return "NSC"
+    
     texto = texto.strip().upper()
     
+    # ===== CASO ESPECIAL: Visibilidad Vertical (VV) =====
+    # Reconocer: "vis ver", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"
+    if any(x in texto for x in ["VIS VER", "VV", "VIS VERT", "VISIBILIDAD VERTICAL"]):
+        import re
+        # Buscar números en el texto
+        numeros = re.findall(r'\d+', texto)
+        if numeros:
+            altura_metros = int(numeros[0])
+            # Convertir metros a cientos de pies (1 pie = 0.3048 metros)
+            altura_pies = int(round(altura_metros / 0.3048))
+            altura_cientos = altura_pies // 100
+            altura_cientos = min(max(altura_cientos, 0), 999)
+            return f"VV{altura_cientos:03d}"
+    # ===================================================
+    
+    # Casos sin nubes
     if texto in ["DESPEJADO", "SKC", "CLR", "", "NSC", "SIN NUBES", "NO NUBES"]:
         return "NSC"
     
-    if vis_m >= 9999 and not fenomeno.strip() and texto in ["NSC", "SKC", "CLR", "DESPEJADO"]:
+    # Verificar CAVOK
+    if vis_m >= 9999 and not fenomeno.strip():
         return "CAVOK"
     
-    return "NSC"
-
-def verificar_cavok(vis_m, fenomeno, nubes):
-    return (vis_m >= 9999 and not fenomeno.strip() and nubes in ["NSC", "SKC", "CLR"])
+    # Mapeo de tipos de nubes
+    tipos_nubes = {
+        "CU": "CU", "SC": "SC", "ST": "ST", "CB": "CB", "TCU": "TCU",
+        "AC": "AC", "AS": "AS", "NS": "NS", "CI": "CI"
+    }
+    
+    # Dividir por comas para múltiples capas
+    capas = texto.split(",")
+    codigos_nubes = []
+    
+    for capa in capas[:4]:  # Máximo 4 capas
+        capa = capa.strip()
+        if not capa:
+            continue
+        
+        # Patrón: cantidad (1-8) + tipo + altura
+        import re
+        patron = r'(\d+)\s+([A-Z]{2,4})\s+(\d+)(?:M)?'
+        match = re.search(patron, capa)
+        
+        if match:
+            cantidad = int(match.group(1))
+            tipo = match.group(2)
+            altura = int(match.group(3))
+            
+            # Obtener tipo de nube
+            tipo_nube = tipos_nubes.get(tipo, tipo)
+            
+            # Convertir altura a cientos de pies
+            if altura <= 3000:
+                # Para alturas bajas: redondear a múltiplo de 30
+                if altura % 30 != 0:
+                    altura = (altura // 30) * 30
+                altura_cientos = altura // 30
+            else:
+                # Para alturas altas: redondear a múltiplo de 1000
+                if altura % 1000 != 0:
+                    altura = (altura // 1000) * 1000
+                altura_cientos = (altura // 1000) * 32
+            
+            altura_cientos = min(max(altura_cientos, 1), 999)
+            
+            # Determinar código de cantidad
+            if cantidad <= 2:
+                cod_cant = "FEW"
+            elif cantidad <= 4:
+                cod_cant = "SCT"
+            elif cantidad <= 7:
+                cod_cant = "BKN"
+            else:
+                cod_cant = "OVC"
+            
+            # Construir código
+            codigo = f"{cod_cant}{altura_cientos:03d}"
+            if tipo_nube in ["CB", "TCU"]:
+                codigo += tipo_nube
+            codigos_nubes.append(codigo)
+    
+    return " ".join(codigos_nubes[:4]) if codigos_nubes else "NSC"
 
 # ============================================
 # FUNCIONES DE VALIDACIÓN
