@@ -1509,7 +1509,8 @@ def verificar_y_mostrar_tn_tx():
     - TN a las 12Z (Temperatura Mínima)
     - TX a las 22Z (Temperatura Máxima)
     """
-    hora_actual = datetime.now(timezone.utc).strftime("%H%M")
+    hora_actual = "1200"
+    #hora_actual = datetime.now(timezone.utc).strftime("%H%M")
     hora_int = int(hora_actual)
     
     mostrar_tn_tx = False
