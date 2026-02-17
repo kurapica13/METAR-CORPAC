@@ -1800,7 +1800,7 @@ with col_header2:
 st.markdown("---")
 
 # ============================================
-# INTERFAZ PRINCIPAL - CORREGIDA
+# INTERFAZ PRINCIPAL - VERSIÓN CORREGIDA
 # ============================================
 col_izq, col_der = st.columns([2, 1])
 
@@ -1827,7 +1827,6 @@ with col_izq:
             </div>
             """, unsafe_allow_html=True)
         
-        # Mostrar estado actual
         if st.session_state.get('hora_bloqueada', False):
             st.info("🔒 **METAR**: Hora automática bloqueada")
         else:
@@ -1835,11 +1834,24 @@ with col_izq:
     
     st.markdown("---")
     
-    # === FORMULARIO PRINCIPAL ===
+    # === COMPONENTES INTERACTIVOS FUERA DEL FORMULARIO ===
+    with st.container():
+        st.markdown("<div class='section-title'>FENÓMENOS</div>", unsafe_allow_html=True)
+        fenomeno = crear_componente_fenomenos()
+    
+    st.markdown("---")
+    
+    with st.container():
+        st.markdown("<div class='section-title'>NUBOSIDAD</div>", unsafe_allow_html=True)
+        nubes = crear_componente_nubes()
+    
+    st.markdown("---")
+    
+    # === FORMULARIO PRINCIPAL (SOLO CAMPOS DE TEXTO) ===
     with st.form(key='metar_form'):
         st.markdown("<div class='section-title'>DATOS DEL REPORTE</div>", unsafe_allow_html=True)
         
-        # Fila 1: Día y Hora (Tipo ya está fuera)
+        # Fila 1: Día y Hora
         col1, col2 = st.columns(2)
         with col1:
             dia = st.text_input(
@@ -1856,23 +1868,30 @@ with col_izq:
                 disabled=st.session_state.get('hora_bloqueada', False),
                 help="Formato HHMM (ej: 1230)"
             )
-            
-            # Validación de hora en tiempo real (solo para SPECI)
-            if not st.session_state.get('hora_bloqueada', False) and hora:
-                try:
-                    valido, msg = validar_hora_auditoria(hora)
-                    if valido:
-                        st.caption(f"✅ {msg}")
-                    else:
-                        st.caption(f"❌ {msg}")
-                except:
-                    pass
         
         st.markdown("---")
         
-        # VIENTO - Componente mejorado
+        # VIENTO
         st.markdown("<div class='section-title'>VIENTO</div>", unsafe_allow_html=True)
-        dir_viento, int_viento, var_viento = crear_componente_viento()
+        col1, col2, col3, col4 = st.columns([2, 2, 1, 3])
+        with col1:
+            dir_viento = st.text_input("Dirección", key='dir_viento', placeholder="360")
+        with col2:
+            int_viento = st.text_input("Intensidad", key='int_viento', placeholder="15")
+        with col3:
+            st.markdown("<br><h3 style='text-align: center;'>-</h3>", unsafe_allow_html=True)
+        with col4:
+            col4_1, col4_2 = st.columns(2)
+            with col4_1:
+                var_desde = st.text_input("Var Desde", key='var_desde', placeholder="340")
+            with col4_2:
+                var_hasta = st.text_input("Var Hasta", key='var_hasta', placeholder="080")
+        
+        # Construir variación
+        if var_desde and var_hasta:
+            var_viento = f"{var_desde}V{var_hasta}"
+        else:
+            var_viento = ""
         
         st.markdown("---")
         
@@ -1888,18 +1907,6 @@ with col_izq:
         
         st.markdown("---")
         
-        # FENÓMENOS - Componente mejorado
-        st.markdown("<div class='section-title'>FENÓMENOS</div>", unsafe_allow_html=True)
-        fenomeno = crear_componente_fenomenos()
-        
-        st.markdown("---")
-        
-        # NUBES - Componente mejorado con VV
-        st.markdown("<div class='section-title'>NUBOSIDAD</div>", unsafe_allow_html=True)
-        nubes = crear_componente_nubes()
-        
-        st.markdown("---")
-        
         # TEMPERATURA Y PRESIÓN
         st.markdown("<div class='section-title'>TEMPERATURA Y PRESIÓN</div>", unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4)
@@ -1912,15 +1919,38 @@ with col_izq:
         with col4:
             presion = st.text_input("Presión Est.", key='presion', placeholder="Opcional")
         
-        if temp and rocio:
-            try:
-                hr_calculada = calcular_hr_automatica(float(temp), float(rocio))
-                if hr_calculada:
-                    st.caption(f"💧 HR Calculada: {hr_calculada}% (referencia)")
-            except:
-                pass
+        st.markdown("---")
+        
+        # PRECIPITACIÓN (selector dentro del form está bien porque es st.selectbox)
+        st.markdown("<div class='section-title'>PRECIPITACIÓN (OBLIGATORIO)</div>", unsafe_allow_html=True)
+        pp_valor = st.selectbox(
+            "Cantidad de precipitación",
+            options=[""] + list(OPCIONES_PP.keys()),
+            format_func=lambda x: f"{x} - {OPCIONES_PP.get(x, 'Seleccione...')}" if x else "Seleccione cantidad...",
+            key="pp_select",
+            help="PPTRZ = Trazas (<0.1mm), PP001 = 0.1mm, ... PP010 = 1.0mm"
+        )
         
         st.markdown("---")
+        
+        # TN/TX (si aplica)
+        mostrar_tn_tx = verificar_y_mostrar_tn_tx()
+        
+        if mostrar_tn_tx:
+            st.markdown("---")
+        
+        # INFORMACIÓN SUPLEMENTARIA
+        st.markdown("<div class='section-title'>INFORMACIÓN SUPLEMENTARIA</div>", unsafe_allow_html=True)
+        suplementaria = st.text_input("", key='suplementaria', placeholder="NOSIG RMK CB AL NE")
+        
+        st.markdown("---")
+        
+        # BOTONES DEL FORMULARIO
+        col1, col2 = st.columns(2)
+        with col1:
+            generar = st.form_submit_button("GENERAR METAR", use_container_width=True, type="primary")
+        with col2:
+            limpiar = st.form_submit_button("LIMPIAR CAMPOS", use_container_width=True)
         
         # PRECIPITACIÓN - Campo obligatorio
         st.markdown("<div class='section-title'>PRECIPITACIÓN (OBLIGATORIO)</div>", unsafe_allow_html=True)
