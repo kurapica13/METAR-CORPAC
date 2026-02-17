@@ -697,7 +697,7 @@ with col_izq:
     # DÍA Y HORA
     st.markdown("<div class='section-title'>FECHA/HORA</div>", unsafe_allow_html=True)
     cc = st.columns(2)
-    with cc[0]: st.text_input("Día", key='dia', placeholder="01-31")
+    with cc[0]: st.text_input(":green[Día]", key='dia', placeholder="01-31")
     with cc[1]: st.text_input("Hora UTC", key='hora', placeholder="HHMM")
     if st.session_state.hora:
         v, m = validar_hora_auditoria(st.session_state.hora) if len(st.session_state.hora)==4 else (False,"")
