@@ -1,7 +1,7 @@
 """
 METAR DIGITAL - VERSIÓN PROFESIONAL CORPAC PERÚ
 Aeropuerto Internacional Jorge Chávez (SPJC)
-Versión 12.0 - OPTIMIZADA Y AUTOMATIZADA
+Versión 13.0 - OPTIMIZADA Y AUTOMATIZADA
 
 Características:
 ✅ Sistema de hora inteligente - Bloqueada para METAR, modificable para SPECI
@@ -9,6 +9,7 @@ Características:
 ✅ Viento con 4 campos - Dirección, intensidad, variación desde/hasta
 ✅ Fenómenos con múltiples selecciones - Catálogo completo de Lima con botones +/-
 ✅ Nubes con validación 1-3-5 - Sistema de capas que valida regla de octas
+✅ Visibilidad Vertical (VV) - Soporte completo con VV/// para altura desconocida
 ✅ PP Obligatorio - Formato PPTRZ (PPTRZ=trazas, PP001=0.1mm...PP010=1.0mm)
 ✅ TN/TX Automáticos - TN 12Z (mínima), TX 22Z (máxima)
 ✅ HR Automática - Cálculo informativo desde temp/rocío
@@ -22,7 +23,6 @@ Características:
 ✅ Sin duplicados - Reemplaza reportes con misma fecha/hora
 ✅ Persistencia de datos entre sesiones
 ✅ Sistema de autenticación - Solo personal autorizado
-✅ Visibilidad Vertical - Soporta "vis ver 600M" → VV020
 """
 
 import streamlit as st
@@ -259,23 +259,22 @@ def calcular_hr_automatica(temp_c, rocio_c):
     except:
         return None
 
-def inicializar_hora_automatica():
-    """
-    Inicializa la hora UTC actual pero permite modificarla SOLO si es SPECI
-    Y guarda la hora real de generación para auditoría
-    """
+def on_tipo_change():
+    """Maneja el cambio de tipo de reporte y actualiza la hora automáticamente"""
+    tipo_seleccionado = st.session_state.tipo_selector
+    st.session_state.tipo = tipo_seleccionado
+    
     hora_actual_utc = datetime.now(timezone.utc).strftime("%H%M")
     
-    if 'hora_real_sistema' not in st.session_state:
-        st.session_state.hora_real_sistema = hora_actual_utc
-    
-    if st.session_state.tipo == TipoReporte.METAR.value:
+    if tipo_seleccionado == TipoReporte.METAR.value:
         st.session_state.hora = hora_actual_utc
         st.session_state.hora_bloqueada = True
-    else:
+        st.session_state.hora_original = hora_actual_utc
+    else:  # SPECI
         st.session_state.hora_bloqueada = False
-        if not st.session_state.hora:
+        if not st.session_state.get('hora'):
             st.session_state.hora = hora_actual_utc
+        st.session_state.hora_original = hora_actual_utc
 
 def validar_hora_auditoria(hora_ingresada):
     """
@@ -391,6 +390,14 @@ st.markdown("""
         border-radius: 5px;
         border-left: 3px solid #0b3d91;
         margin: 10px 0;
+    }
+    
+    .vv-box {
+        background: #f0f0f0;
+        padding: 10px;
+        border-radius: 5px;
+        border-left: 3px solid #ff9900;
+        margin: 5px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -648,31 +655,63 @@ def crear_componente_fenomenos():
 
 def crear_componente_nubes():
     """
-    Sistema de capas de nubes con validación de regla 1-3-5
+    Sistema de capas de nubes con validación de regla 1-3-5 y botón +
+    Incluye soporte para Visibilidad Vertical (VV)
     """
     st.markdown("**Nubosidad:**")
     
+    # Inicializar capas de nubes si no existen
     if 'capas_nubes' not in st.session_state:
         st.session_state.capas_nubes = []
     
+    # Inicializar VV si no existe
+    if 'vv_activo' not in st.session_state:
+        st.session_state.vv_activo = False
+        st.session_state.vv_valor = ""
+    
+    # Mostrar VV si está activo
+    if st.session_state.vv_activo:
+        with st.container():
+            col1, col2, col3, col4 = st.columns([1, 3, 3, 1])
+            with col1:
+                st.markdown(f"**VV**")
+            with col2:
+                if st.session_state.vv_valor == "///":
+                    st.markdown(f"📊 Visibilidad Vertical: DESCONOCIDA")
+                else:
+                    st.markdown(f"📊 Visibilidad Vertical: {st.session_state.vv_valor}m")
+            with col3:
+                if st.session_state.vv_valor == "///":
+                    st.markdown(f"**Código:** VV///")
+                else:
+                    vv_codigo = f"VV{round(int(st.session_state.vv_valor)/30):03d}"
+                    st.markdown(f"**Código:** {vv_codigo}")
+            with col4:
+                if st.button("✖", key="del_vv"):
+                    st.session_state.vv_activo = False
+                    st.session_state.vv_valor = ""
+                    st.rerun()
+            st.markdown("---")
+    
+    # Mostrar capas de nubes existentes
     for i, capa in enumerate(st.session_state.capas_nubes):
         with st.container():
-            col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 1])
+            col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 2, 1])
             
             with col1:
                 st.markdown(f"**Capa {i+1}**")
             
             with col2:
                 octas = capa.get('octas', '')
-                st.markdown(f"Octas: {octas}")
+                st.markdown(f"**{octas}** octas")
             
             with col3:
                 tipo = capa.get('tipo', '')
-                st.markdown(f"Tipo: {tipo}")
+                st.markdown(f"**{tipo}**")
             
             with col4:
                 altura = capa.get('altura', '')
-                st.markdown(f"Altura: {altura}m")
+                st.markdown(f"**{altura} m**")
             
             with col5:
                 if st.button("✖", key=f"del_capa_{i}"):
@@ -681,63 +720,182 @@ def crear_componente_nubes():
     
     st.markdown("---")
     
-    col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
-    
-    with col1:
-        nueva_octa = st.selectbox("Octas", options=[""] + OCTAS, key="nueva_octa")
-    
-    with col2:
-        nuevo_tipo = st.selectbox("Tipo", options=[""] + TIPOS_NUBES, key="nuevo_tipo")
-    
-    with col3:
-        nueva_altura = st.text_input("Altura (m)", key="nueva_altura", placeholder="300")
-    
-    with col4:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("➕ Agregar Capa", key="add_capa", use_container_width=True):
-            if nueva_octa and nuevo_tipo and nueva_altura:
-                error_validacion = validar_regla_nubes(
-                    st.session_state.capas_nubes,
-                    int(nueva_octa),
-                    nuevo_tipo
+    # Opciones para agregar (Nubes normales o VV)
+    if not st.session_state.vv_activo:
+        opcion_agregar = st.radio(
+            "Tipo de nubosidad a agregar:",
+            ["☁️ Capa de nubes", "🌫️ Visibilidad Vertical (VV)"],
+            horizontal=True,
+            key="tipo_nubosidad"
+        )
+        
+        if opcion_agregar == "☁️ Capa de nubes":
+            st.markdown("**Agregar nueva capa de nubes:**")
+            
+            col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
+            
+            with col1:
+                nueva_octa = st.selectbox(
+                    "Octas", 
+                    options=[""] + OCTAS, 
+                    key="nueva_octa",
+                    help="Cantidad de octas (1-8)"
                 )
-                
-                if error_validacion:
-                    st.error(error_validacion)
+            
+            with col2:
+                nuevo_tipo = st.selectbox(
+                    "Tipo", 
+                    options=[""] + TIPOS_NUBES, 
+                    key="nuevo_tipo",
+                    help="Tipo de nube (CU, SC, ST, etc.)"
+                )
+            
+            with col3:
+                nueva_altura = st.text_input(
+                    "Altura (m)", 
+                    key="nueva_altura", 
+                    placeholder="300",
+                    help="Altura en metros sobre el nivel de la estación"
+                )
+            
+            with col4:
+                st.markdown("<br>", unsafe_allow_html=True)
+                agregar = st.button("➕ Agregar Capa", key="add_capa", use_container_width=True)
+            
+            # Validar y agregar capa
+            if agregar:
+                if not nueva_octa:
+                    st.error("❌ Seleccione la cantidad de octas")
+                elif not nuevo_tipo:
+                    st.error("❌ Seleccione el tipo de nube")
+                elif not nueva_altura:
+                    st.error("❌ Ingrese la altura en metros")
                 else:
-                    st.session_state.capas_nubes.append({
-                        'octas': nueva_octa,
-                        'tipo': nuevo_tipo,
-                        'altura': nueva_altura
-                    })
+                    try:
+                        altura_int = int(nueva_altura)
+                        if altura_int < 0 or altura_int > 30000:
+                            st.error("❌ Altura fuera de rango (0-30000m)")
+                        else:
+                            error_validacion = validar_regla_nubes(
+                                st.session_state.capas_nubes,
+                                int(nueva_octa),
+                                nuevo_tipo,
+                                nueva_altura
+                            )
+                            
+                            if error_validacion:
+                                st.error(error_validacion)
+                            else:
+                                st.session_state.capas_nubes.append({
+                                    'octas': nueva_octa,
+                                    'tipo': nuevo_tipo,
+                                    'altura': nueva_altura
+                                })
+                                st.success(f"✅ Capa agregada: {nueva_octa} octas de {nuevo_tipo} a {nueva_altura}m")
+                                st.rerun()
+                    except ValueError:
+                        st.error("❌ La altura debe ser un número válido")
+        
+        else:  # Visibilidad Vertical
+            st.markdown("**Agregar Visibilidad Vertical (VV):**")
+            st.caption("La VV se usa cuando hay oscurecimiento y no se pueden distinguir capas de nubes")
+            
+            if st.session_state.capas_nubes:
+                st.warning("⚠️ VV no puede combinarse con capas de nubes normales")
+            
+            col1, col2, col3 = st.columns([3, 2, 1])
+            
+            with col1:
+                vv_altura = st.text_input(
+                    "Altura de visibilidad vertical (m)",
+                    key="vv_altura_input",
+                    placeholder="600 (o dejar vacío para VV///)",
+                    help="Altura hasta donde se puede ver verticalmente. Dejar vacío si es desconocida."
+                )
+            
+            with col2:
+                if vv_altura:
+                    try:
+                        vv_int = int(vv_altura)
+                        vv_cientos = round(vv_int / 30)
+                        st.markdown(f"<br><h3 style='color: #ff9900;'>VV{vv_cientos:03d}</h3>", unsafe_allow_html=True)
+                    except:
+                        st.markdown("<br><h3 style='color: #ff9900;'>VV///</h3>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<br><h3 style='color: #ff9900;'>VV///</h3>", unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown("<br>", unsafe_allow_html=True)
+                agregar_vv = st.button("➕ Activar VV", key="add_vv", use_container_width=True)
+            
+            if agregar_vv:
+                if st.session_state.capas_nubes:
+                    st.error("❌ No se puede activar VV cuando hay capas de nubes normales")
+                elif not vv_altura:
+                    # VV/// para altura desconocida
+                    st.session_state.vv_activo = True
+                    st.session_state.vv_valor = "///"
+                    st.session_state.capas_nubes = []  # Limpiar capas existentes
+                    st.success("✅ VV activado con altura desconocida (VV///)")
                     st.rerun()
+                else:
+                    try:
+                        vv_int = int(vv_altura)
+                        if vv_int < 0 or vv_int > 3000:
+                            st.error("❌ Altura fuera de rango (0-3000m)")
+                        else:
+                            st.session_state.vv_activo = True
+                            st.session_state.vv_valor = str(vv_int)
+                            st.session_state.capas_nubes = []  # Limpiar capas existentes
+                            st.success(f"✅ VV activado: {vv_int}m (VV{round(vv_int/30):03d})")
+                            st.rerun()
+                    except ValueError:
+                        st.error("❌ Ingrese un número válido")
     
-    return convertir_nubes_a_metar(st.session_state.capas_nubes)
+    # Mostrar resumen completo
+    st.markdown("---")
+    st.markdown("**📊 Resumen de nubosidad:**")
+    
+    if st.session_state.vv_activo:
+        if st.session_state.vv_valor == "///":
+            st.markdown("• **VV///** - Visibilidad Vertical desconocida")
+        else:
+            vv_codigo = f"VV{round(int(st.session_state.vv_valor)/30):03d}"
+            st.markdown(f"• **{vv_codigo}** - Visibilidad Vertical de {st.session_state.vv_valor}m")
+    else:
+        if st.session_state.capas_nubes:
+            for i, capa in enumerate(st.session_state.capas_nubes):
+                st.markdown(f"• Capa {i+1}: {capa['octas']} octas de **{capa['tipo']}** a **{capa['altura']}m**")
+        else:
+            st.markdown("• **NSC** - Sin nubes significativas")
+    
+    return convertir_nubes_completo_a_metar()
 
-def validar_regla_nubes(capas_existentes, nuevas_octas, nuevo_tipo):
+def convertir_nubes_completo_a_metar():
     """
-    Valida la regla 1-3-5 para capas de nubes
+    Convierte tanto VV como capas de nubes a formato METAR
     """
-    num_capa = len(capas_existentes) + 1
+    # Si hay VV activo, retornar VV
+    if st.session_state.get('vv_activo', False):
+        if st.session_state.vv_valor == "///":
+            return "VV///"
+        else:
+            try:
+                vv_metros = int(st.session_state.vv_valor)
+                vv_cientos = round(vv_metros / 30)
+                vv_cientos = min(max(vv_cientos, 0), 999)
+                return f"VV{vv_cientos:03d}"
+            except:
+                return "VV///"
     
-    if num_capa == 1 and nuevas_octas < 1:
-        return "La primera capa debe tener al menos 1 octa"
-    elif num_capa == 2 and nuevas_octas < 3:
-        return "La segunda capa debe tener al menos 3 octas"
-    elif num_capa == 3 and nuevas_octas < 5:
-        return "La tercera capa debe tener al menos 5 octas"
-    elif num_capa > 3:
-        return "Máximo 3 capas de nubes permitidas"
+    # Si no hay capas, retornar NSC
+    if not st.session_state.get('capas_nubes', []):
+        return "NSC"
     
-    return None
-
-def convertir_nubes_a_metar(capas):
-    """
-    Convierte las capas de nubes a formato METAR
-    """
+    # Convertir capas normales
     codigos = []
     
-    for capa in capas:
+    for capa in st.session_state.capas_nubes:
         octas = capa['octas']
         tipo = capa['tipo']
         altura = int(capa['altura'])
@@ -753,7 +911,29 @@ def convertir_nubes_a_metar(capas):
         
         codigos.append(codigo)
     
-    return " ".join(codigos) if codigos else "NSC"
+    return " ".join(codigos[:4])
+
+def validar_regla_nubes(capas_existentes, nuevas_octas, nuevo_tipo, nueva_altura):
+    """
+    Valida la regla 1-3-5 para capas de nubes
+    """
+    num_capa = len(capas_existentes) + 1
+    
+    if num_capa > 3:
+        return "❌ Máximo 3 capas de nubes permitidas"
+    
+    if num_capa == 1 and nuevas_octas < 1:
+        return "❌ La primera capa debe tener al menos 1 octa"
+    elif num_capa == 2 and nuevas_octas < 3:
+        return "❌ La segunda capa debe tener al menos 3 octas"
+    elif num_capa == 3 and nuevas_octas < 5:
+        return "❌ La tercera capa debe tener al menos 5 octas"
+    
+    for capa in capas_existentes:
+        if capa['tipo'] == nuevo_tipo and capa['altura'] == nueva_altura:
+            return f"⚠️ Ya existe una capa de {nuevo_tipo} a {nueva_altura}m"
+    
+    return None
 
 def crear_componente_precipitacion():
     """
@@ -1472,6 +1652,9 @@ if 'contador' not in st.session_state:
 if 'campos_inicializados' not in st.session_state:
     st.session_state.campos_inicializados = False
 
+if 'tipo' not in st.session_state:
+    st.session_state.tipo = TipoReporte.METAR.value
+
 # ============================================
 # FUNCIÓN PARA LIMPIAR CAMPOS
 # ============================================
@@ -1480,6 +1663,7 @@ def limpiar_campos():
     st.session_state.dia = datetime.now(timezone.utc).strftime("%d")
     st.session_state.hora = datetime.now(timezone.utc).strftime("%H%M")
     st.session_state.tipo = TipoReporte.METAR.value
+    st.session_state.tipo_selector = TipoReporte.METAR.value
     st.session_state.dir_viento = ""
     st.session_state.int_viento = ""
     st.session_state.var_desde = ""
@@ -1489,6 +1673,8 @@ def limpiar_campos():
     st.session_state.rvr = ""
     st.session_state.fenomenos_seleccionados = []
     st.session_state.capas_nubes = []
+    st.session_state.vv_activo = False
+    st.session_state.vv_valor = ""
     st.session_state.temp = ""
     st.session_state.rocio = ""
     st.session_state.qnh = ""
@@ -1497,6 +1683,7 @@ def limpiar_campos():
     st.session_state.pp_select = ""
     st.session_state.tn_tx_valor = ""
     st.session_state.tn_tx_hora = ""
+    st.session_state.hora_bloqueada = True
     st.session_state.campos_inicializados = True
 
 # ============================================
@@ -1506,6 +1693,7 @@ if not st.session_state.campos_inicializados:
     st.session_state.dia = datetime.now(timezone.utc).strftime("%d")
     st.session_state.hora = datetime.now(timezone.utc).strftime("%H%M")
     st.session_state.tipo = TipoReporte.METAR.value
+    st.session_state.tipo_selector = TipoReporte.METAR.value
     st.session_state.dir_viento = ""
     st.session_state.int_viento = ""
     st.session_state.var_desde = ""
@@ -1515,6 +1703,8 @@ if not st.session_state.campos_inicializados:
     st.session_state.rvr = ""
     st.session_state.fenomenos_seleccionados = []
     st.session_state.capas_nubes = []
+    st.session_state.vv_activo = False
+    st.session_state.vv_valor = ""
     st.session_state.temp = ""
     st.session_state.rocio = ""
     st.session_state.qnh = ""
@@ -1523,6 +1713,7 @@ if not st.session_state.campos_inicializados:
     st.session_state.pp_select = ""
     st.session_state.tn_tx_valor = ""
     st.session_state.tn_tx_hora = ""
+    st.session_state.hora_bloqueada = True
     st.session_state.campos_inicializados = True
 
 # ============================================
@@ -1583,6 +1774,8 @@ with st.sidebar:
         | BKN | 5-7 octas |
         | OVC | 8 octas |
         | VV | Visibilidad Vertical |
+        | NSC | Sin nubes significativas |
+        | CAVOK | Techo y visibilidad OK |
         """)
 
 # ============================================
@@ -1607,35 +1800,73 @@ with col_header2:
 st.markdown("---")
 
 # ============================================
-# INTERFAZ PRINCIPAL
+# INTERFAZ PRINCIPAL - CORREGIDA
 # ============================================
 col_izq, col_der = st.columns([2, 1])
 
 with col_izq:
+    # === SELECTOR DE TIPO FUERA DEL FORMULARIO ===
+    with st.container():
+        st.markdown("<div class='section-title'>TIPO DE REPORTE</div>", unsafe_allow_html=True)
+        
+        info_col1, info_col2 = st.columns([3, 1])
+        with info_col1:
+            tipo = st.selectbox(
+                "Seleccione tipo de reporte",
+                [t.value for t in TipoReporte],
+                key='tipo_selector',
+                on_change=on_tipo_change,
+                help="METAR: hora bloqueada y automática | SPECI: hora modificable"
+            )
+        with info_col2:
+            hora_actual = datetime.now(timezone.utc).strftime("%H%M")
+            st.markdown(f"""
+            <div style='background: #e7f3ff; padding: 10px; border-radius: 5px; text-align: center;'>
+                <small>Hora UTC</small><br>
+                <strong>{hora_actual}</strong>Z
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Mostrar estado actual
+        if st.session_state.get('hora_bloqueada', False):
+            st.info("🔒 **METAR**: Hora automática bloqueada")
+        else:
+            st.info("🔓 **SPECI**: Hora modificable (máx 15 min de diferencia)")
+    
+    st.markdown("---")
+    
+    # === FORMULARIO PRINCIPAL ===
     with st.form(key='metar_form'):
         st.markdown("<div class='section-title'>DATOS DEL REPORTE</div>", unsafe_allow_html=True)
         
-        # Fila 1: Tipo, Día, Hora
-        col1, col2, col3 = st.columns(3)
+        # Fila 1: Día y Hora (Tipo ya está fuera)
+        col1, col2 = st.columns(2)
         with col1:
-            tipo = st.selectbox(
-                "Tipo", 
-                [t.value for t in TipoReporte], 
-                key='tipo',
-                on_change=inicializar_hora_automatica
+            dia = st.text_input(
+                "Día", 
+                key='dia', 
+                placeholder="01-31",
+                value=datetime.now(timezone.utc).strftime("%d"),
+                help="Día del mes (01-31)"
             )
         with col2:
-            dia = st.text_input("Día", key='dia', placeholder="01-31")
-        with col3:
             hora = st.text_input(
                 "Hora UTC", 
                 key='hora',
                 disabled=st.session_state.get('hora_bloqueada', False),
-                help="Bloqueada para METAR. Modificable solo para SPECI"
+                help="Formato HHMM (ej: 1230)"
             )
-            if 'ultima_diferencia_hora' in st.session_state:
-                if st.session_state.ultima_diferencia_hora > 0:
-                    st.caption(f"⏱️ Diferencia: {st.session_state.ultima_diferencia_hora} min")
+            
+            # Validación de hora en tiempo real (solo para SPECI)
+            if not st.session_state.get('hora_bloqueada', False) and hora:
+                try:
+                    valido, msg = validar_hora_auditoria(hora)
+                    if valido:
+                        st.caption(f"✅ {msg}")
+                    else:
+                        st.caption(f"❌ {msg}")
+                except:
+                    pass
         
         st.markdown("---")
         
@@ -1663,7 +1894,7 @@ with col_izq:
         
         st.markdown("---")
         
-        # NUBES - Componente mejorado
+        # NUBES - Componente mejorado con VV
         st.markdown("<div class='section-title'>NUBOSIDAD</div>", unsafe_allow_html=True)
         nubes = crear_componente_nubes()
         
@@ -1682,9 +1913,12 @@ with col_izq:
             presion = st.text_input("Presión Est.", key='presion', placeholder="Opcional")
         
         if temp and rocio:
-            hr_calculada = calcular_hr_automatica(float(temp), float(rocio))
-            if hr_calculada:
-                st.caption(f"💧 HR Calculada: {hr_calculada}% (referencia)")
+            try:
+                hr_calculada = calcular_hr_automatica(float(temp), float(rocio))
+                if hr_calculada:
+                    st.caption(f"💧 HR Calculada: {hr_calculada}% (referencia)")
+            except:
+                pass
         
         st.markdown("---")
         
@@ -1735,7 +1969,7 @@ with col_izq:
                 rmk_completa = f"{st.session_state.tn_tx_completo} {rmk_completa}".strip()
             
             datos = {
-                'tipo': tipo, 'dia': dia, 'hora': hora,
+                'tipo': st.session_state.tipo, 'dia': dia, 'hora': hora,
                 'dir_viento': dir_viento, 'int_viento': int_viento, 'var_viento': var_viento,
                 'vis': vis, 'vis_min': vis_min, 'rvr': rvr,
                 'fenomeno': fenomeno, 'nubes': nubes,
@@ -1772,7 +2006,7 @@ with col_izq:
                     st.success(f"✅ Reporte de las {hora_reporte}Z agregado correctamente")
                 
                 st.session_state.ultimo_metar = resultado['metar']
-                st.session_state.ultimo_tipo = tipo
+                st.session_state.ultimo_tipo = st.session_state.tipo
                 st.session_state.ultimo_registro = resultado['registro']
             else:
                 st.error(f"❌ ERROR: {resultado['error']}")
@@ -1843,6 +2077,6 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
     <p>METAR Digital - CORPAC Peru | Aeropuerto Internacional Jorge Chavez (SPJC)</p>
-    <p style='font-size: 0.8rem;'>Sistema de Registro de Observaciones - Versión 12.0</p>
+    <p style='font-size: 0.8rem;'>Sistema de Registro de Observaciones - Versión 13.0</p>
 </div>
 """, unsafe_allow_html=True)
