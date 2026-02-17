@@ -707,7 +707,7 @@ with col_izq:
     # VIENTO
     st.markdown("<div class='section-title'>VIENTO</div>", unsafe_allow_html=True)
     cc = st.columns([2,2,1,2,2])
-    with cc[0]: st.text_input("Dir", key='dir_viento', placeholder="green:360")
+    with cc[0]: st.text_input("Dir", key='dir_viento', placeholder="360")
     with cc[1]: st.text_input("Int", key='int_viento', placeholder="15")
     with cc[2]: st.markdown("<br><b>-</b>", unsafe_allow_html=True)
     with cc[3]: st.text_input("Desde", key='var_desde', placeholder="340")
