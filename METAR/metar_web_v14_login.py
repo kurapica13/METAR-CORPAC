@@ -1732,7 +1732,8 @@ with col_izq:
                 help="METAR: hora bloqueada y automática | SPECI: hora modificable"
             )
         with info_col2:
-            hora_actual = datetime.now(timezone.utc).strftime("%H%M")
+            hora_actual = "1200"
+            #hora_actual = datetime.now(timezone.utc).strftime("%H%M")
             st.markdown(f"""
             <div style='background: #e7f3ff; padding: 10px; border-radius: 5px; text-align: center;'>
                 <small>Hora UTC</small><br>
