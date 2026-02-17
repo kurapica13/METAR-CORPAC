@@ -1,18 +1,10 @@
 """
-METAR DIGITAL - VERSIÓN PROFESIONAL CORPAC PERÚ
+METAR DIGITAL - SISTEMA PROFESIONAL CORPAC PERÚ
 Aeropuerto Internacional Jorge Chávez (SPJC)
-Versión 17.0 - VERSIÓN SIMPLIFICADA (SIN VALIDACIÓN DE HORA)
+Versión: Final con orden correcto de RMK
 
-Características:
-✅ Hora libre - El operador ingresa la hora que corresponde
-✅ TN/TX simplificado - TN 12Z, TX 22Z (solo valor numérico)
-✅ PP000 agregado - Para cuando no hay precipitación
-✅ Orden correcto: Fenómenos → Nubes → Temp/Presión → Suplementaria → TN/TX → Precipitación
-✅ Viento con 4 campos - Dirección, intensidad, variación desde/hasta
-✅ Fenómenos con botón "➕ Agregar Fenómeno"
-✅ Nubes con validación 1-3-5 y VV
-✅ Formato PPTRZ completo (PP000 a PP010)
-✅ Interfaz compacta y profesional
+Orden del METAR:
+[pronóstico/texto fijo] RMK [TN/TX] [texto libre del especialista] [PPXXX] =
 """
 
 import streamlit as st
@@ -20,24 +12,23 @@ from datetime import datetime, timezone
 import pandas as pd
 from pathlib import Path
 import re
-import os
 from io import BytesIO
 from decimal import Decimal, ROUND_HALF_UP
 import hmac
 from enum import Enum
 
 # ============================================
-# CONFIGURACIÓN DE PÁGINA
+# CONFIGURACIÓN INICIAL
 # ============================================
 st.set_page_config(
-    page_title="REGISTRO METAR/SPECI SPJC",
+    page_title="METAR SPJC - CORPAC",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================
-# ENUMS PARA CONSTANTES
+# CONSTANTES Y ENUMS
 # ============================================
 class TipoReporte(str, Enum):
     METAR = "METAR"
@@ -47,259 +38,338 @@ class Cuadrante(str, Enum):
     N = "N"; NE = "NE"; E = "E"; SE = "SE"
     S = "S"; SW = "SW"; W = "W"; NW = "NW"
 
-# ============================================
-# LISTA COMPLETA DE FENÓMENOS PARA LIMA (SPJC)
-# ============================================
-FENOMENOS_LIMA = {
-    "Nieblas": ["FG - Niebla", "PRFG - Niebla Parcial", "BCFG - Niebla en Bancos", 
-                "MIFG - Niebla Baja", "VCFG - Niebla en la Vecindad"],
-    "Nieblinas": ["BR - Neblina"],
-    "Precipitación": ["-RA - Lluvia Ligera", "RA - Lluvia Moderada", "+RA - Lluvia Fuerte",
-                     "-DZ - Llovizna Ligera", "DZ - Llovizna Moderada", "+DZ - Llovizna Fuerte",
-                     "SHRA - Chubascos de Lluvia", "-SHRA - Chubascos Ligeros", "+SHRA - Chubascos Fuertes"],
-    "Tormentas": ["TS - Tormenta", "-TSRA - Tormenta con Lluvia Ligera", 
-                  "TSRA - Tormenta con Lluvia", "+TSRA - Tormenta con Lluvia Fuerte"],
-    "Otros": ["HZ - Calima", "FU - Humo", "DU - Polvo", "SA - Arena", "VA - Ceniza Volcánica"]
-}
+# Catálogo de fenómenos para Lima
+FENOMENOS = [
+    "FG - Niebla",
+    "PRFG - Niebla Parcial",
+    "BCFG - Niebla en Bancos",
+    "MIFG - Niebla Baja",
+    "VCFG - Niebla en la Vecindad",
+    "BR - Neblina",
+    "-RA - Lluvia Ligera",
+    "RA - Lluvia Moderada",
+    "+RA - Lluvia Fuerte",
+    "-DZ - Llovizna Ligera",
+    "DZ - Llovizna Moderada",
+    "+DZ - Llovizna Fuerte",
+    "SHRA - Chubascos",
+    "-SHRA - Chubascos Ligeros",
+    "+SHRA - Chubascos Fuertes",
+    "TS - Tormenta",
+    "-TSRA - Tormenta con Lluvia Ligera",
+    "TSRA - Tormenta con Lluvia",
+    "+TSRA - Tormenta con Lluvia Fuerte",
+    "HZ - Calima",
+    "FU - Humo"
+]
 
-# Opciones de precipitación en formato PPTRZ (CON PP000)
-OPCIONES_PP = {
-    "PP000": "Sin precipitación (0.0 mm)",
+# Precipitación en formato PPTRZ
+PRECIPITACION = {
+    "PP000": "Sin precipitación",
     "PPTRZ": "Trazas (< 0.1 mm)",
-    "PP001": "0.1 mm", "PP002": "0.2 mm", "PP003": "0.3 mm",
-    "PP004": "0.4 mm", "PP005": "0.5 mm", "PP006": "0.6 mm",
-    "PP007": "0.7 mm", "PP008": "0.8 mm", "PP009": "0.9 mm",
+    "PP001": "0.1 mm",
+    "PP002": "0.2 mm",
+    "PP003": "0.3 mm",
+    "PP004": "0.4 mm",
+    "PP005": "0.5 mm",
+    "PP006": "0.6 mm",
+    "PP007": "0.7 mm",
+    "PP008": "0.8 mm",
+    "PP009": "0.9 mm",
     "PP010": "1.0 mm"
 }
 
-# Tipos de nubes y octas
-TIPOS_NUBES = ["CU", "SC", "ST", "AC", "AS", "NS", "CI", "CB", "TCU"]
+# Tipos de nubes
+TIPOS_NUBES = ["CU", "SC", "ST", "AC", "AS", "NS", "CI"]
 OCTAS = ["1", "2", "3", "4", "5", "6", "7", "8"]
 
 # Mapeo de octas a códigos METAR
-MAPEO_OCTAS = {'1': 'FEW', '2': 'FEW', '3': 'SCT', '4': 'SCT',
-               '5': 'BKN', '6': 'BKN', '7': 'BKN', '8': 'OVC'}
+CODIGOS_OCTAS = {
+    '1': 'FEW', '2': 'FEW',
+    '3': 'SCT', '4': 'SCT',
+    '5': 'BKN', '6': 'BKN', '7': 'BKN',
+    '8': 'OVC'
+}
 
 # ============================================
-# SISTEMA DE AUTENTICACIÓN
+# DIRECTORIO DE DATOS
 # ============================================
-def verificar_autenticacion():
+DATA_DIR = Path("datos_metar")
+DATA_DIR.mkdir(exist_ok=True)
+
+# ============================================
+# AUTENTICACIÓN
+# ============================================
+def autenticar():
     if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
-        st.session_state.usuario = None
-    
-    with st.sidebar:
-        if st.session_state.autenticado:
-            st.markdown(f"👤 **Usuario:** {st.session_state.usuario}")
-            if st.button("🚪 Cerrar Sesión", use_container_width=True):
-                st.session_state.autenticado = False
-                st.session_state.usuario = None
-                st.rerun()
-            st.markdown("---")
     
     if st.session_state.autenticado:
         return True
     
-    st.markdown("""
-    <style>
-    .login-container{max-width:400px;margin:100px auto;padding:30px;background:var(--background-color);border-radius:10px;text-align:center;border:1px solid rgba(128,128,128,0.2);}
-    .login-header{color:#0b3d91;margin-bottom:20px;}.login-logo{font-size:48px;margin-bottom:10px;}
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-    st.markdown("<div class='login-logo'>✈️</div>")
-    st.markdown("<h2 class='login-header'>Sistema METAR Digital</h2>")
-    st.markdown("Aeropuerto Internacional Jorge Chávez")
-    st.markdown("CORPAC Perú")
-    st.markdown("---")
-    
-    with st.form("login_form"):
-        usuario = st.text_input("Usuario")
-        contraseña = st.text_input("Contraseña", type="password")
-        submit = st.form_submit_button("🔐 INGRESAR", use_container_width=True)
-    
-    if submit:
-        try:
-            passwords = st.secrets.get("passwords", {"admin": "corpac2024", "metar": "spjc2024"})
-        except:
-            passwords = {"admin": "corpac2024", "metar": "spjc2024"}
+    with st.container():
+        st.markdown("""
+        <style>
+        .login-box {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid #0b3d91;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
-        if usuario in passwords and hmac.compare_digest(contraseña, passwords[usuario]):
-            st.session_state.autenticado = True
-            st.session_state.usuario = usuario
-            st.rerun()
-        else:
-            st.error("❌ Usuario o contraseña incorrectos")
+        st.markdown("<div class='login-box'>", unsafe_allow_html=True)
+        st.image("https://upload.wikimedia.org/wikipedia/commons/5/5e/Corpac_logo.png", width=200)
+        st.markdown("## Sistema METAR Digital")
+        st.markdown("Aeropuerto Internacional Jorge Chávez")
+        st.markdown("---")
+        
+        usuario = st.text_input("Usuario")
+        password = st.text_input("Contraseña", type="password")
+        
+        if st.button("INGRESAR", use_container_width=True):
+            if usuario == "metar" and password == "spjc2024":
+                st.session_state.autenticado = True
+                st.rerun()
+            else:
+                st.error("Credenciales incorrectas")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.stop()
+
+autenticar()
+
+# ============================================
+# FUNCIONES DE ARCHIVOS
+# ============================================
+def nombre_archivo_mes():
+    return f"SPJC_METAR_{datetime.now().strftime('%Y_%m')}.xlsx"
+
+def cargar_registros():
+    archivo = DATA_DIR / nombre_archivo_mes()
+    if archivo.exists():
+        try:
+            df = pd.read_excel(archivo)
+            return df.to_dict('records')
+        except:
+            return []
+    return []
+
+def guardar_registros(registros):
+    if not registros:
+        return
     
-    st.markdown("---")
-    st.markdown("Solo personal autorizado CORPAC")
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.stop()
+    df = pd.DataFrame(registros)
+    archivo = DATA_DIR / nombre_archivo_mes()
+    
+    with pd.ExcelWriter(archivo, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='METAR SPJC')
+        
+        # Ajustar ancho de columnas
+        worksheet = writer.sheets['METAR SPJC']
+        for col in worksheet.columns:
+            max_len = 0
+            col_letter = col[0].column_letter
+            for cell in col:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+            worksheet.column_dimensions[col_letter].width = min(max_len + 2, 50)
 
-verificar_autenticacion()
-
 # ============================================
-# CONSTANTES Y CONFIGURACIÓN
+# FUNCIONES DE PROCESAMIENTO
 # ============================================
-DIRECTORIO_DATOS = Path("datos_metar")
-DIRECTORIO_DATOS.mkdir(exist_ok=True)
-
-# ============================================
-# FUNCIÓN DE REDONDEO
-# ============================================
-def redondear_metar(valor):
+def redondear(valor):
     try:
         d = Decimal(str(valor))
         return int(d.quantize(Decimal('1'), rounding=ROUND_HALF_UP))
     except:
         return int(round(float(valor)))
 
-# ============================================
-# FUNCIONES DE UTILIDAD
-# ============================================
-def calcular_hr_automatica(temp_c, rocio_c):
+def procesar_viento(dir, inten, var_desde, var_hasta):
+    """Procesa viento según reglas CORPAC"""
     try:
-        a, b = 17.625, 243.04
-        rocio_c = min(rocio_c, temp_c)
-        es_temp = a * temp_c / (b + temp_c)
-        es_rocio = a * rocio_c / (b + rocio_c)
-        hr = 100 * (10**(es_rocio - es_temp))
-        return round(min(max(hr, 0), 100))
+        d = int(dir)
+        i = inten.upper().strip()
+        
+        # Caso especial: calma
+        if d == 0 and i == "00":
+            return "00000KT"
+        
+        # Procesar intensidad con posibles ráfagas
+        if 'G' in i:
+            partes = i.replace('G', ' ').split()
+            base = int(partes[0])
+            raf = int(partes[1]) if len(partes) > 1 else base
+            intensidad = f"{base:02d}G{raf:02d}"
+        else:
+            intensidad = f"{int(i):02d}"
+        
+        # Sin variación
+        if not var_desde or not var_hasta:
+            return f"{d:03d}{intensidad}KT"
+        
+        # Con variación
+        desde = int(var_desde)
+        hasta = int(var_hasta)
+        
+        # Calcular diferencia circular
+        diff = min(abs(hasta - desde), 360 - abs(hasta - desde))
+        
+        if diff < 60:
+            return f"{d:03d}{intensidad}KT"
+        elif diff >= 180 or int(i) < 3:
+            return f"VRB{intensidad}KT"
+        else:
+            return f"{d:03d}{intensidad}KT {desde:03d}V{hasta:03d}"
+            
     except:
-        return None
+        return "/////KT"
 
-# ============================================
-# ESTILOS CSS PERSONALIZADOS
-# ============================================
-st.markdown("""
-<style>
-    .stApp { background-color: var(--background-color); }
-    .section-title { color: #0b3d91 !important; font-weight: 700 !important; 
-                    font-size: 1.1rem !important; border-bottom: 2px solid #0b3d91 !important; 
-                    padding-bottom: 0.3rem !important; margin: 0.5rem 0 !important; }
-    .stTextInput label, .stSelectbox label { color: #0b3d91 !important; font-weight: 600 !important; }
-    @media (prefers-color-scheme: dark) {
-        .stTextInput label, .stSelectbox label { color: #6ab0ff !important; }
-        .section-title { color: #6ab0ff !important; border-bottom-color: #6ab0ff !important; }
-    }
-    .metar-box { background: #1e1e1e; color: #00ff00; padding: 1rem; border-radius: 5px; 
-                font-family: 'Courier New', monospace; font-size: 1rem; border-left: 5px solid #0b3d91; }
-    .historial-item { background: #f8f9fa; padding: 0.5rem; margin-bottom: 0.3rem; border-radius: 3px; 
-                     font-family: monospace; font-size: 11px; border-left: 3px solid #0b3d91; }
-    .historial-item-speci { background: #FFE699; border-left: 3px solid #FFC000; }
-    .stButton button { width: 100%; border-radius: 5px; }
-    .stButton button[kind="primary"] { background-color: #0b3d91; color: white; }
-    .stButton button[kind="primary"]:hover { background-color: #1a4fa0; }
-</style>
-""", unsafe_allow_html=True)
+def visibilidad_a_metros(vis):
+    """Convierte texto de visibilidad a metros"""
+    vis = vis.upper().strip()
+    
+    if vis.endswith("KM"):
+        km = float(vis[:-2])
+        return 9999 if km >= 10 else int(km * 1000)
+    elif vis.endswith("M"):
+        return int(vis[:-1])
+    else:
+        m = int(vis)
+        return 9999 if m >= 10000 else m
 
-# ============================================
-# FUNCIONES DE GESTIÓN DE ARCHIVOS
-# ============================================
-def obtener_nombre_archivo_mensual():
-    return f"SPJC_METAR_{datetime.now(timezone.utc).strftime('%Y_%m')}.xlsx"
-
-def cargar_registros_mes():
-    archivo = DIRECTORIO_DATOS / obtener_nombre_archivo_mensual()
-    if archivo.exists():
-        try:
-            df = pd.read_excel(archivo, sheet_name='METAR SPJC')
-            registros = []
-            for _, row in df.iterrows():
-                r = row.to_dict()
-                r['Día'] = str(r.get('DIA', '')).zfill(2)
-                r['Hora'] = str(r.get('HORA', '')).zfill(4)
-                r['Tipo'] = r.get('TIPO', '')
-                r['METAR_Completo'] = r.get('METAR', '')
-                registros.append(r)
-            return registros
-        except:
-            return []
-    return []
-
-def guardar_registros_mes(registros):
-    if not registros: 
-        return False, "No hay registros"
+def visibilidad_minima(texto, vis_principal):
+    """Procesa visibilidad mínima con cuadrantes"""
+    if not texto:
+        return ""
+    
+    texto = texto.upper().strip()
+    
+    # Identificar cuadrante
+    cuadrante = None
+    for q in Cuadrante:
+        if texto.endswith(q.value):
+            valor = texto[:-len(q.value)]
+            cuadrante = q.value
+            break
+    else:
+        valor = texto
+    
     try:
-        archivo = DIRECTORIO_DATOS / obtener_nombre_archivo_mensual()
-        df = pd.DataFrame(registros)
+        if valor.endswith("KM"):
+            m = 9999 if float(valor[:-2]) >= 10 else int(float(valor[:-2]) * 1000)
+        elif valor.endswith("M"):
+            m = int(valor[:-1])
+        else:
+            m = int(valor)
+            m = 9999 if m >= 10000 else m
         
-        rename_map = {
-            'Día': 'DIA', 'Hora': 'HORA', 'Tipo': 'TIPO',
-            'Dirección_Viento': 'DIR VIENTO', 'Intensidad_Viento': 'INTENSIDAD',
-            'Variación_Viento': 'VARIACION', 'Visibilidad_Original': 'VIS (ORIGINAL)',
-            'Visibilidad_Metros': 'VIS (CODIGO)', 'Visibilidad_Mínima': 'VIS MIN',
-            'RVR': 'RVR', 'Fenómeno_Texto': 'FENOMENO', 'Fenómeno_Código': 'WX',
-            'Nubes_Texto': 'NUBOSIDAD', 'Nubes_Código': 'CLD',
-            'Temperatura': 'TEMP °C', 'Punto_Rocío': 'ROCÍO °C',
-            'Humedad_Relativa_%': 'HR %', 'QNH': 'QNH',
-            'Presión_Estación': 'PRESION', 'Info_Suplementaria': 'RMK',
-            'METAR_Completo': 'METAR'
-        }
-        df = df.rename(columns=rename_map)
-        
-        cols = ['DIA','HORA','TIPO','DIR VIENTO','INTENSIDAD','VARIACION',
-                'VIS (ORIGINAL)','VIS (CODIGO)','VIS MIN','RVR','FENOMENO','WX',
-                'NUBOSIDAD','CLD','TEMP °C','ROCÍO °C','HR %','QNH','PRESION','RMK','METAR']
-        df = df[[c for c in cols if c in df.columns]]
-        df = df.sort_values(['DIA','HORA'])
-        
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='METAR SPJC', index=False)
-        output.seek(0)
-        
-        with open(archivo, 'wb') as f:
-            f.write(output.getvalue())
-        return True, f"✅ {len(registros)} registros guardados"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
+        # Validar reglas
+        if m < 1500 or (m < vis_principal * 0.5 and m < 5000):
+            return f"{m:04d}{cuadrante or ''}"
+        return ""
+    except:
+        return ""
+
+def codigo_fenomenos(texto):
+    """Convierte texto de fenómenos a código METAR"""
+    if not texto:
+        return ""
+    
+    texto = texto.lower()
+    codigos = []
+    
+    # Mapeo de fenómenos comunes
+    mapa = {
+        "niebla": "FG",
+        "niebla parcial": "PRFG",
+        "niebla en bancos": "BCFG",
+        "niebla baja": "MIFG",
+        "niebla en la vecindad": "VCFG",
+        "neblina": "BR",
+        "lluvia ligera": "-RA",
+        "lluvia moderada": "RA",
+        "lluvia fuerte": "+RA",
+        "llovizna ligera": "-DZ",
+        "llovizna moderada": "DZ",
+        "llovizna fuerte": "+DZ",
+        "chubascos": "SHRA",
+        "tormenta": "TS",
+        "calima": "HZ",
+        "humo": "FU"
+    }
+    
+    for key, value in mapa.items():
+        if key in texto:
+            codigos.append(value)
+    
+    return " ".join(codigos[:3])
+
+def procesar_nubes(capas, vv_activo, vv_valor):
+    """Procesa nubes a código METAR"""
+    if vv_activo:
+        if vv_valor == "///":
+            return "VV///"
+        try:
+            return f"VV{round(int(vv_valor)/30):03d}"
+        except:
+            return "VV///"
+    
+    if not capas:
+        return "NSC"
+    
+    codigos = []
+    for capa in capas[:3]:
+        altura = round(int(capa['altura']) / 30)
+        altura = min(max(altura, 1), 999)
+        cod = f"{CODIGOS_OCTAS[capa['octas']]}{altura:03d}"
+        codigos.append(cod)
+    
+    return " ".join(codigos)
 
 # ============================================
-# FRAGMENTS - COMPONENTES INTERACTIVOS
+# COMPONENTES FRAGMENT
 # ============================================
-
 @st.fragment
 def fragment_fenomenos():
-    """Fragment para fenómenos con botón + centrado"""
-    st.markdown("**Fenómenos:**")
+    st.markdown("#### Fenómenos")
     
-    if 'fenomenos_seleccionados' not in st.session_state:
-        st.session_state.fenomenos_seleccionados = []
+    if 'fenomenos' not in st.session_state:
+        st.session_state.fenomenos = []
     
-    # Mostrar seleccionados con botón eliminar
-    for i, fen in enumerate(st.session_state.fenomenos_seleccionados):
+    # Mostrar seleccionados
+    for i, fen in enumerate(st.session_state.fenomenos):
         cols = st.columns([10, 1])
-        with cols[0]: 
-            st.info(f"📌 {fen}")
+        with cols[0]:
+            st.info(fen)
         with cols[1]:
             if st.button("✖", key=f"del_fen_{i}"):
-                st.session_state.fenomenos_seleccionados.pop(i)
+                st.session_state.fenomenos.pop(i)
                 st.rerun()
     
-    # Selector y botón centrado
-    col1, col2, col3 = st.columns([4, 2, 4])
-    with col2:
-        opciones = []
-        for cat, fens in FENOMENOS_LIMA.items():
-            opciones.append(f"--- {cat} ---")
-            opciones.extend(fens)
-        
-        nuevo = st.selectbox("##", options=[""] + opciones, key="sel_fen",
-                            format_func=lambda x: x if x else "Seleccione...",
-                            label_visibility="collapsed")
-        
-        if st.button("➕ Agregar Fenómeno", use_container_width=True):
-            if nuevo and not nuevo.startswith("---"):
-                if nuevo not in st.session_state.fenomenos_seleccionados:
-                    st.session_state.fenomenos_seleccionados.append(nuevo)
-                    st.rerun()
+    # Selector y botón
+    cols = st.columns([3, 1])
+    with cols[0]:
+        nuevo = st.selectbox(
+            "Agregar",
+            options=[""] + FENOMENOS,
+            key="nuevo_fen",
+            label_visibility="collapsed"
+        )
+    with cols[1]:
+        if st.button("➕", use_container_width=True):
+            if nuevo and nuevo not in st.session_state.fenomenos:
+                st.session_state.fenomenos.append(nuevo)
+                st.rerun()
 
 @st.fragment
 def fragment_nubes():
-    """Fragment para nubes con VV y validación 1-3-5"""
-    st.markdown("**Nubosidad:**")
+    st.markdown("#### Nubosidad")
     
     if 'capas_nubes' not in st.session_state:
         st.session_state.capas_nubes = []
@@ -307,42 +377,31 @@ def fragment_nubes():
         st.session_state.vv_activo = False
         st.session_state.vv_valor = ""
     
-    # Mostrar VV si activo
+    # Mostrar VV si está activo
     if st.session_state.vv_activo:
-        cols = st.columns([1, 3, 3, 1])
-        with cols[0]: 
-            st.markdown("**VV**")
-        with cols[1]: 
-            txt = "DESCONOCIDA" if st.session_state.vv_valor == "///" else f"{st.session_state.vv_valor}m"
-            st.markdown(f"📊 {txt}")
-        with cols[2]:
+        cols = st.columns([8, 1])
+        with cols[0]:
             if st.session_state.vv_valor == "///":
-                st.markdown("**VV///**")
+                st.info("🌫️ Visibilidad Vertical: DESCONOCIDA (VV///)")
             else:
-                try:
-                    cod = f"VV{round(int(st.session_state.vv_valor)/30):03d}"
-                    st.markdown(f"**{cod}**")
-                except:
-                    st.markdown("**VV///**")
-        with cols[3]:
+                cod = f"VV{round(int(st.session_state.vv_valor)/30):03d}"
+                st.info(f"🌫️ Visibilidad Vertical: {st.session_state.vv_valor}m ({cod})")
+        with cols[1]:
             if st.button("✖", key="del_vv"):
                 st.session_state.vv_activo = False
                 st.session_state.vv_valor = ""
                 st.rerun()
-        st.markdown("---")
     
-    # Mostrar capas existentes
+    # Mostrar capas
     for i, capa in enumerate(st.session_state.capas_nubes):
-        cols = st.columns([1, 1, 1.5, 1.5, 0.5])
-        with cols[0]: 
-            st.markdown(f"**Capa {i+1}**")
-        with cols[1]: 
-            st.markdown(f"**{capa['octas']}** oct")
-        with cols[2]: 
-            st.markdown(f"**{capa['tipo']}**")
-        with cols[3]: 
-            st.markdown(f"**{capa['altura']}m**")
-        with cols[4]:
+        cols = st.columns([2, 2, 3, 1])
+        with cols[0]:
+            st.write(f"**Capa {i+1}:** {capa['octas']} octas")
+        with cols[1]:
+            st.write(f"**{capa['tipo']}**")
+        with cols[2]:
+            st.write(f"**{capa['altura']} m**")
+        with cols[3]:
             if st.button("✖", key=f"del_capa_{i}"):
                 st.session_state.capas_nubes.pop(i)
                 st.rerun()
@@ -350,320 +409,214 @@ def fragment_nubes():
     st.markdown("---")
     
     if not st.session_state.vv_activo:
-        tipo = st.radio("##", ["☁️ Capa", "🌫️ VV"], horizontal=True, key="tipo_nube",
-                       label_visibility="collapsed")
+        tipo = st.radio(
+            "Tipo",
+            ["Capa de nubes", "Visibilidad Vertical (VV)"],
+            horizontal=True,
+            key="tipo_nube"
+        )
         
-        if tipo == "☁️ Capa":
-            cols = st.columns([1, 1.5, 2, 1])
-            with cols[0]: 
-                octa = st.selectbox("Oct", [""]+OCTAS, key="nueva_octa")
-            with cols[1]: 
-                tipo_n = st.selectbox("Tipo", [""]+TIPOS_NUBES, key="nuevo_tipo")
-            with cols[2]: 
-                alt = st.text_input("Alt (m)", key="nueva_altura", placeholder="300")
+        if tipo == "Capa de nubes":
+            cols = st.columns([2, 2, 3, 1])
+            with cols[0]:
+                octa = st.selectbox("Octas", [""] + OCTAS, key="octa")
+            with cols[1]:
+                tipo_n = st.selectbox("Tipo", [""] + TIPOS_NUBES, key="tipo_n")
+            with cols[2]:
+                alt = st.text_input("Altura (m)", key="altura", placeholder="300")
             with cols[3]:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("➕", key="add_capa", use_container_width=True):
                     if octa and tipo_n and alt:
                         try:
-                            alt_i = int(alt)
-                            if 0 <= alt_i <= 30000:
-                                err = validar_regla_nubes(st.session_state.capas_nubes, int(octa), tipo_n, alt)
-                                if not err:
-                                    st.session_state.capas_nubes.append({'octas':octa,'tipo':tipo_n,'altura':alt})
+                            alt_int = int(alt)
+                            if 0 < alt_int <= 30000:
+                                # Validar regla 1-3-5
+                                n = len(st.session_state.capas_nubes) + 1
+                                if n == 1 and int(octa) >= 1:
+                                    st.session_state.capas_nubes.append({
+                                        'octas': octa,
+                                        'tipo': tipo_n,
+                                        'altura': alt
+                                    })
                                     st.rerun()
-                                else: 
-                                    st.error(err)
-                            else: 
+                                elif n == 2 and int(octa) >= 3:
+                                    st.session_state.capas_nubes.append({
+                                        'octas': octa,
+                                        'tipo': tipo_n,
+                                        'altura': alt
+                                    })
+                                    st.rerun()
+                                elif n == 3 and int(octa) >= 5:
+                                    st.session_state.capas_nubes.append({
+                                        'octas': octa,
+                                        'tipo': tipo_n,
+                                        'altura': alt
+                                    })
+                                    st.rerun()
+                                elif n > 3:
+                                    st.error("Máximo 3 capas")
+                                else:
+                                    st.error(f"Capa {n} debe tener mínimo {[1,3,5][n-1]} octas")
+                            else:
                                 st.error("Altura fuera de rango")
-                        except: 
-                            st.error("Número inválido")
+                        except:
+                            st.error("Altura inválida")
+        
         else:  # VV
             cols = st.columns([3, 2, 1])
-            with cols[0]: 
-                vv_alt = st.text_input("Altura VV (m)", key="vv_alt", placeholder="600 o vacío")
+            with cols[0]:
+                vv = st.text_input("Altura VV (m)", key="vv_alt", placeholder="600 o vacío")
             with cols[1]:
-                if vv_alt:
-                    try: 
-                        st.markdown(f"<br><b>VV{round(int(vv_alt)/30):03d}</b>", unsafe_allow_html=True)
-                    except: 
-                        st.markdown("<br><b>VV///</b>", unsafe_allow_html=True)
-                else: 
-                    st.markdown("<br><b>VV///</b>", unsafe_allow_html=True)
+                if vv:
+                    try:
+                        st.markdown(f"**VV{round(int(vv)/30):03d}**")
+                    except:
+                        st.markdown("**VV///**")
+                else:
+                    st.markdown("**VV///**")
             with cols[2]:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("➕ VV", key="add_vv", use_container_width=True):
                     if st.session_state.capas_nubes:
-                        st.error("No puede combinar VV con capas de nubes")
-                    elif not vv_alt:
+                        st.error("No combinar VV con capas")
+                    elif not vv:
                         st.session_state.vv_activo = True
                         st.session_state.vv_valor = "///"
-                        st.session_state.capas_nubes = []
                         st.rerun()
                     else:
                         try:
-                            vv_i = int(vv_alt)
-                            if 0 <= vv_i <= 3000:
+                            vv_int = int(vv)
+                            if 0 <= vv_int <= 3000:
                                 st.session_state.vv_activo = True
-                                st.session_state.vv_valor = str(vv_i)
-                                st.session_state.capas_nubes = []
+                                st.session_state.vv_valor = str(vv_int)
                                 st.rerun()
-                            else: 
-                                st.error("Altura debe ser 0-3000m")
-                        except: 
-                            st.error("Número inválido")
-
-def validar_regla_nubes(capas, octas, tipo, alt):
-    n = len(capas) + 1
-    if n > 3: 
-        return "❌ Máximo 3 capas permitidas"
-    if n == 1 and octas < 1: 
-        return "❌ Primera capa: mínimo 1 octa"
-    if n == 2 and octas < 3: 
-        return "❌ Segunda capa: mínimo 3 octas"
-    if n == 3 and octas < 5: 
-        return "❌ Tercera capa: mínimo 5 octas"
-    for c in capas:
-        if c['tipo'] == tipo and c['altura'] == alt:
-            return "⚠️ Capa duplicada"
-    return None
-
-def convertir_nubes_a_metar():
-    if st.session_state.get('vv_activo'):
-        if st.session_state.vv_valor == "///": 
-            return "VV///"
-        try: 
-            return f"VV{round(int(st.session_state.vv_valor)/30):03d}"
-        except: 
-            return "VV///"
-    if not st.session_state.get('capas_nubes'): 
-        return "NSC"
-    codigos = []
-    for c in st.session_state.capas_nubes:
-        alt = round(int(c['altura'])/30)
-        alt = min(max(alt, 1), 999)
-        cod = f"{MAPEO_OCTAS[c['octas']]}{alt:03d}"
-        if c['tipo'] in ['CB', 'TCU']: 
-            cod += c['tipo']
-        codigos.append(cod)
-    return " ".join(codigos[:4])
-
-# ============================================
-# FUNCIONES DE PROCESAMIENTO
-# ============================================
-def procesar_viento(dir, inten, var):
-    d = int(dir)
-    i = str(inten).upper().strip()
-    if d == 0 and i == "00": 
-        return "00000KT"
-    
-    if 'G' in i:
-        parts = i.replace('G', ' ').split()
-        base = int(parts[0])
-        gust = int(parts[1]) if len(parts) > 1 else base
-        im = f"{base:02d}G{gust:02d}"
-    else:
-        im = f"{int(i):02d}"
-    
-    if not var: 
-        return f"{d:03d}{im}KT"
-    
-    try:
-        if 'V' not in var: 
-            return f"{d:03d}{im}KT"
-        de, ha = map(int, var.split('V'))
-        diff = min(abs(ha - de), 360 - abs(ha - de))
-        if diff < 60: 
-            return f"{d:03d}{im}KT"
-        if diff >= 180 or int(i) < 3: 
-            return f"VRB{im}KT"
-        return f"{d:03d}{im}KT {de:03d}V{ha:03d}"
-    except:
-        return f"{d:03d}{im}KT"
-
-def convertir_visibilidad(v):
-    v = v.strip().upper()
-    if not v: 
-        raise ValueError("Visibilidad requerida")
-    try:
-        if v.endswith("KM"):
-            km = float(v[:-2])
-            return 9999 if km >= 10 else int(km * 1000)
-        if v.endswith("M"):
-            return int(v[:-1])
-        m = int(v)
-        return 9999 if m >= 10000 else m
-    except: 
-        raise ValueError("Formato inválido")
-
-def procesar_visibilidad_minima(vm, v_m):
-    if not vm: 
-        return "", ""
-    vm = vm.strip().upper()
-    for q in [Cuadrante.NW, Cuadrante.NE, Cuadrante.SW, Cuadrante.SE,
-              Cuadrante.N, Cuadrante.S, Cuadrante.E, Cuadrante.W]:
-        if vm.endswith(q.value):
-            val = vm[:-len(q.value)]
-            cuad = q
-            break
-    else: 
-        val = vm
-        cuad = None
-    
-    try:
-        if val.endswith("KM"):
-            mm = 9999 if float(val[:-2]) >= 10 else int(float(val[:-2]) * 1000)
-        elif val.endswith("M"):
-            mm = int(val[:-1])
-        else:
-            mm = int(val)
-            mm = 9999 if mm >= 10000 else mm
-        
-        valida = mm < 1500 or (mm < v_m * 0.5 and mm < 5000)
-        if not valida: 
-            return "", "⚠️ No cumple reglas"
-        return (f"{mm:04d}{cuad.value}" if cuad else f"{mm:04d}"), ""
-    except: 
-        return "", "❌ Formato inválido"
-
-def codificar_fenomenos(texto, vis):
-    if not texto: 
-        return ""
-    texto = texto.lower()
-    especiales = []
-    
-    # Fenómenos especiales
-    if "prfg" in texto or "parcial" in texto:
-        especiales.append("PRFG")
-    if "vcfg" in texto or "vecindad" in texto:
-        especiales.append("VCFG")
-    if "bcfg" in texto or "bancos" in texto:
-        especiales.append("BCFG")
-    if "mifg" in texto or "baja" in texto:
-        especiales.append("MIFG")
-    
-    intensidades = {"ligera": "-", "ligero": "-", "moderada": "", "fuerte": "+"}
-    descriptores = {"sh": "SH", "ts": "TS", "fz": "FZ"}
-    precipitacion = {"lluvia": "RA", "llovizna": "DZ", "nieve": "SN", "granizo": "GR"}
-    
-    resultados = []
-    for p in texto.split(','):
-        p = p.strip()
-        if not p: 
-            continue
-        
-        cod = None
-        for k, v in precipitacion.items():
-            if k in p: 
-                cod = v
-                break
-        
-        if not cod:
-            if "neblina" in p:
-                cod = "BR" if vis <= 5000 else None
-            elif "niebla" in p and "parcial" not in p and "baja" not in p:
-                cod = "FG" if vis < 1000 else None
-        
-        if cod:
-            desc = ""
-            intens = ""
-            for k, v in descriptores.items():
-                if k in p: 
-                    desc = v
-                    p = p.replace(k, "")
-                    break
-            for k, v in intensidades.items():
-                if k in p: 
-                    intens = v
-                    break
-            resultados.append(intens + desc + cod)
-    
-    return " ".join((resultados + especiales)[:3])
+                            else:
+                                st.error("Altura 0-3000m")
+                        except:
+                            st.error("Valor inválido")
 
 # ============================================
 # FUNCIÓN PRINCIPAL DE GENERACIÓN
 # ============================================
 def generar_metar(datos):
     try:
+        # Validaciones básicas
+        if not datos['hora'] or len(datos['hora']) != 4:
+            raise ValueError("Hora en formato HHMM")
         if not datos['dir_viento'] or not datos['int_viento']:
-            raise ValueError("Dirección e intensidad del viento son obligatorias")
+            raise ValueError("Viento incompleto")
         if not datos['vis']:
-            raise ValueError("Visibilidad es obligatoria")
+            raise ValueError("Visibilidad requerida")
         if not datos['temp'] or not datos['rocio'] or not datos['qnh']:
-            raise ValueError("Temperatura, Rocío y QNH son obligatorios")
+            raise ValueError("Temperatura, Rocío y QNH requeridos")
         
-        hora = datos['hora']
-        if len(hora) != 4 or not hora.isdigit():
-            raise ValueError("Hora debe ser HHMM (4 dígitos)")
-        if int(hora[:2]) > 23 or int(hora[2:]) > 59:
-            raise ValueError("Hora inválida")
+        # Validar formato de hora (solo formato, no valor)
+        if not datos['hora'].isdigit():
+            raise ValueError("Hora debe ser numérica")
         
-        viento = procesar_viento(datos['dir_viento'], datos['int_viento'], datos['var_viento'])
-        vis_m = convertir_visibilidad(datos['vis'])
+        # Procesar viento
+        viento = procesar_viento(
+            datos['dir_viento'],
+            datos['int_viento'],
+            datos['var_desde'],
+            datos['var_hasta']
+        )
         
-        vis_min = ""
-        if datos['vis_min']:
-            vis_min, err = procesar_visibilidad_minima(datos['vis_min'], vis_m)
-            if err: 
-                raise ValueError(err)
+        # Procesar visibilidad
+        vis_m = visibilidad_a_metros(datos['vis'])
+        vis_min = visibilidad_minima(datos['vis_min'], vis_m)
         
+        # Procesar otros campos
         rvr = datos['rvr'].strip() if datos['rvr'] else ""
-        fenomeno = codificar_fenomenos(datos['fenomeno'], vis_m)
-        nubes = datos['nubes'] if datos['nubes'] else "NSC"
+        fenomeno = codigo_fenomenos(" ".join(st.session_state.get('fenomenos', [])))
+        nubes = procesar_nubes(
+            st.session_state.get('capas_nubes', []),
+            st.session_state.get('vv_activo', False),
+            st.session_state.get('vv_valor', "")
+        )
         
+        # Temperaturas
         temp = float(datos['temp'])
         rocio = float(datos['rocio'])
         qnh = int(float(datos['qnh']))
         
         if rocio > temp:
-            raise ValueError("El punto de rocío no puede ser mayor que la temperatura")
+            raise ValueError("Rocío no puede ser mayor que temperatura")
         
-        temp_metar = redondear_metar(temp)
-        rocio_metar = redondear_metar(rocio)
+        # ===== CONSTRUCCIÓN DEL METAR CON ORDEN CORRECTO =====
+        partes = []
         
-        partes = [f"{datos['tipo']} SPJC {datos['dia']}{hora}Z {viento}"]
+        # Parte principal del METAR
+        partes.append(f"{datos['tipo']} SPJC {datos['dia']}{datos['hora']}Z")
+        partes.append(viento)
+        partes.append(f"{vis_m:04d}")
         
-        if nubes == "CAVOK":
-            partes.append("CAVOK")
-        else:
-            partes.append(f"{vis_m:04d}")
-            if vis_min: 
-                partes.append(vis_min)
-            if rvr: 
-                partes.append(rvr)
-            if fenomeno: 
-                partes.append(fenomeno)
-            partes.append(nubes)
+        if vis_min:
+            partes.append(vis_min)
+        if rvr:
+            partes.append(rvr)
+        if fenomeno:
+            partes.append(fenomeno)
         
-        partes.append(f"{temp_metar:02d}/{rocio_metar:02d} Q{qnh}")
-        if datos['suplementaria']:
-            partes.append(datos['suplementaria'].upper())
+        partes.append(nubes)
+        partes.append(f"{redondear(temp):02d}/{redondear(rocio):02d} Q{qnh}")
         
+        # 1. PRIMERO: Pronóstico/texto fijo (ANTES de RMK)
+        if datos['pronostico']:
+            partes.append(datos['pronostico'].upper())
+        
+        # 2. SEGUNDO: Palabra "RMK"
+        partes.append("RMK")
+        
+        # 3. TERCERO: TN/TX (si aplica)
+        if datos['tn_tx']:
+            partes.append(datos['tn_tx'])
+        
+        # 4. CUARTO: Texto libre del especialista
+        if datos['texto_libre']:
+            partes.append(datos['texto_libre'].upper())
+        
+        # 5. QUINTO: Precipitación PPXXX (solo si no es PP000)
+        if datos['pp'] and datos['pp'] != "PP000":
+            partes.append(datos['pp'])
+        
+        # 6. FINAL: Signo =
         metar = " ".join(partes) + "="
         
-        hr_calc = calcular_hr_automatica(temp, rocio)
+        # Calcular HR (opcional)
+        def hr_calc():
+            try:
+                a, b = 17.625, 243.04
+                tr = min(rocio, temp)
+                es_t = a * temp / (b + temp)
+                es_r = a * tr / (b + tr)
+                return round(100 * (10**(es_r - es_t)))
+            except:
+                return ""
         
         registro = {
-            'Día': str(datos['dia']).zfill(2),
-            'Hora': hora,
+            'Día': datos['dia'].zfill(2),
+            'Hora': datos['hora'],
             'Tipo': datos['tipo'],
             'Dirección_Viento': datos['dir_viento'],
             'Intensidad_Viento': datos['int_viento'],
-            'Variación_Viento': datos['var_viento'],
+            'Variación_Viento': f"{datos['var_desde']}V{datos['var_hasta']}" if datos['var_desde'] and datos['var_hasta'] else "",
             'Visibilidad_Original': datos['vis'],
             'Visibilidad_Metros': vis_m,
             'Visibilidad_Mínima': vis_min,
             'RVR': rvr,
-            'Fenómeno_Texto': datos['fenomeno'],
             'Fenómeno_Código': fenomeno,
-            'Nubes_Texto': datos['nubes'],
             'Nubes_Código': nubes,
             'Temperatura': temp,
             'Punto_Rocío': rocio,
-            'Humedad_Relativa_%': hr_calc if hr_calc else "",
+            'Humedad_Relativa_%': hr_calc(),
             'QNH': qnh,
             'Presión_Estación': datos['presion'],
-            'Info_Suplementaria': datos['suplementaria'],
+            'Pronóstico': datos['pronostico'],
+            'Texto_Libre': datos['texto_libre'],
+            'TN_TX': datos['tn_tx'],
+            'Precipitación': datos['pp'],
             'METAR_Completo': metar
         }
         
@@ -673,391 +626,325 @@ def generar_metar(datos):
         return {'success': False, 'error': str(e)}
 
 # ============================================
-# FUNCIÓN TN/TX SIMPLIFICADA
-# ============================================
-def mostrar_tn_tx():
-    hora = datetime.now(timezone.utc).strftime("%H%M")
-    h = int(hora)
-    
-    if 1200 <= h < 1300:
-        st.markdown("### 📉 TN (Temperatura Mínima) - 12Z")
-        val = st.text_input("Valor TN (°C)", key="tn_valor", placeholder="Ej: 18.5")
-        if val:
-            try:
-                float(val)
-                st.session_state.tn_tx = f"TN{val}/1200Z"
-                st.success(f"✅ TN{val}/1200Z")
-            except:
-                st.error("Valor inválido")
-                st.session_state.tn_tx = None
-        else:
-            st.session_state.tn_tx = None
-        return True
-    elif 2200 <= h < 2300:
-        st.markdown("### 📈 TX (Temperatura Máxima) - 22Z")
-        val = st.text_input("Valor TX (°C)", key="tx_valor", placeholder="Ej: 25.5")
-        if val:
-            try:
-                float(val)
-                st.session_state.tn_tx = f"TX{val}/2200Z"
-                st.success(f"✅ TX{val}/2200Z")
-            except:
-                st.error("Valor inválido")
-                st.session_state.tn_tx = None
-        else:
-            st.session_state.tn_tx = None
-        return True
-    return False
-
-# ============================================
-# FUNCIÓN PARA ACTUALIZAR REGISTRO
-# ============================================
-def actualizar_o_insertar_registro(registros, nuevo_registro):
-    dia_nuevo = str(nuevo_registro.get('Día', '')).zfill(2)
-    hora_nueva = str(nuevo_registro.get('Hora', '')).zfill(4)
-    clave = f"{dia_nuevo}_{hora_nueva}"
-    
-    for i, reg in enumerate(registros):
-        dia_existente = str(reg.get('Día', '')).zfill(2)
-        hora_existente = str(reg.get('Hora', '')).zfill(4)
-        if f"{dia_existente}_{hora_existente}" == clave:
-            registros[i] = nuevo_registro
-            guardar_registros_mes(registros)
-            return "actualizado"
-    
-    registros.insert(0, nuevo_registro)
-    guardar_registros_mes(registros)
-    return "insertado"
-
-# ============================================
-# FUNCIÓN PARA EXPORTAR EXCEL
-# ============================================
-def exportar_a_excel(registros):
-    if not registros:
-        return None, "No hay registros"
-    
-    try:
-        datos = []
-        for r in registros:
-            datos.append({
-                'DIA': str(r.get('Día', '')).zfill(2),
-                'HORA': str(r.get('Hora', '')).zfill(4),
-                'TIPO': r.get('Tipo', ''),
-                'DIR VIENTO': r.get('Dirección_Viento', ''),
-                'INTENSIDAD': r.get('Intensidad_Viento', ''),
-                'VARIACION': r.get('Variación_Viento', ''),
-                'VIS (ORIGINAL)': r.get('Visibilidad_Original', ''),
-                'VIS (CODIGO)': r.get('Visibilidad_Metros', ''),
-                'VIS MIN': r.get('Visibilidad_Mínima', ''),
-                'RVR': r.get('RVR', ''),
-                'FENOMENO': r.get('Fenómeno_Texto', ''),
-                'WX': r.get('Fenómeno_Código', ''),
-                'NUBOSIDAD': r.get('Nubes_Texto', ''),
-                'CLD': r.get('Nubes_Código', ''),
-                'TEMP °C': r.get('Temperatura', ''),
-                'ROCÍO °C': r.get('Punto_Rocío', ''),
-                'HR %': r.get('Humedad_Relativa_%', ''),
-                'QNH': r.get('QNH', ''),
-                'PRESION': r.get('Presión_Estación', ''),
-                'RMK': r.get('Info_Suplementaria', ''),
-                'METAR': r.get('METAR_Completo', '')
-            })
-        
-        df = pd.DataFrame(datos)
-        df = df.sort_values(['DIA', 'HORA'])
-        
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='METAR SPJC', index=False)
-        output.seek(0)
-        
-        return output, f"✅ {len(registros)} registros exportados"
-    except Exception as e:
-        return None, f"Error: {str(e)}"
-
-# ============================================
-# LIMPIAR CAMPOS
-# ============================================
-def limpiar_campos():
-    campos = ['dir_viento', 'int_viento', 'var_desde', 'var_hasta', 'vis', 'vis_min', 'rvr',
-              'temp', 'rocio', 'qnh', 'presion', 'suplementaria', 'pp_select', 'tn_valor', 'tx_valor']
-    for c in campos:
-        if c in st.session_state:
-            st.session_state[c] = ""
-    st.session_state.fenomenos_seleccionados = []
-    st.session_state.capas_nubes = []
-    st.session_state.vv_activo = False
-    st.session_state.vv_valor = ""
-    st.session_state.dia = datetime.now(timezone.utc).strftime("%d")
-    st.session_state.hora = datetime.now(timezone.utc).strftime("%H%M")
-    st.rerun()
-
-# ============================================
-# INICIALIZACIÓN DE SESIÓN
+# INICIALIZACIÓN DE ESTADO
 # ============================================
 if 'registros' not in st.session_state:
-    st.session_state.registros = cargar_registros_mes()
+    st.session_state.registros = cargar_registros()
 if 'historial' not in st.session_state:
     st.session_state.historial = []
-if 'contador' not in st.session_state:
-    st.session_state.contador = len(st.session_state.registros)
-if 'tipo' not in st.session_state:
-    st.session_state.tipo = TipoReporte.METAR.value
-if 'dia' not in st.session_state:
-    st.session_state.dia = datetime.now(timezone.utc).strftime("%d")
-if 'hora' not in st.session_state:
-    st.session_state.hora = datetime.now(timezone.utc).strftime("%H%M")
-
-# ============================================
-# SIDEBAR - TABLAS DE REFERENCIA
-# ============================================
-with st.sidebar:
-    st.markdown("### 📋 REFERENCIAS RÁPIDAS")
-    
-    with st.expander("🌧️ Precipitación (PPTRZ)"):
-        for k, v in OPCIONES_PP.items():
-            st.markdown(f"**{k}**: {v}")
-    
-    with st.expander("🌡️ TN/TX"):
-        st.markdown("**TN**: 12Z (Temperatura Mínima)")
-        st.markdown("**TX**: 22Z (Temperatura Máxima)")
-    
-    with st.expander("🌫️ Visibilidad Mínima"):
-        st.markdown("**Ejemplos:** 0800SW, 1200NE, 1500N")
-    
-    with st.expander("🌀 RVR"):
-        st.markdown("**R32/0400** - Pista 32, 400m")
-        st.markdown("**R12R/M0050** - Pista 12R, < 50m")
-        st.markdown("**R14L/P2000** - Pista 14L, > 2000m")
-    
-    with st.expander("☁️ Códigos de Nubes"):
-        st.markdown("**FEW**: 1-2 octas")
-        st.markdown("**SCT**: 3-4 octas")
-        st.markdown("**BKN**: 5-7 octas")
-        st.markdown("**OVC**: 8 octas")
-        st.markdown("**VV**: Visibilidad Vertical")
-
-# ============================================
-# HEADER PRINCIPAL
-# ============================================
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.markdown("<h2 style='color:#0b3d91;'>REGISTRO METAR/SPECI SPJC</h2>", unsafe_allow_html=True)
-    st.markdown("Aeropuerto Internacional Jorge Chávez - CORPAC Perú")
-with col2:
-    st.markdown(f"<div style='text-align:right;'>{datetime.now(timezone.utc).strftime('%d/%m/%Y')}<br><b>{obtener_nombre_archivo_mensual()}</b></div>", unsafe_allow_html=True)
-
-st.markdown("---")
 
 # ============================================
 # INTERFAZ PRINCIPAL
 # ============================================
-col_izq, col_der = st.columns([2, 1])
+st.markdown("""
+<style>
+    .header {
+        background: linear-gradient(90deg, #0b3d91 0%, #1a4fa0 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+        border-left: 4px solid #0b3d91;
+    }
+    .metar-display {
+        background: #1e1e1e;
+        color: #00ff00;
+        padding: 1rem;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 1.1rem;
+        border-left: 4px solid #0b3d91;
+    }
+    .historial-item {
+        background: #f8f9fa;
+        padding: 0.8rem;
+        margin-bottom: 0.5rem;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 0.9rem;
+        border-left: 3px solid #0b3d91;
+    }
+    .stButton button {
+        border-radius: 5px;
+    }
+    .info-box {
+        background: #e7f3ff;
+        padding: 0.5rem;
+        border-radius: 5px;
+        border-left: 3px solid #0b3d91;
+        margin: 0.5rem 0;
+        font-size: 0.9rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-with col_izq:
-    # TIPO DE REPORTE
-    st.markdown("<div class='section-title'>TIPO DE REPORTE</div>", unsafe_allow_html=True)
-    st.selectbox("##", [t.value for t in TipoReporte], key='tipo_selector',
-                 on_change=lambda: st.session_state.__setitem__('tipo', st.session_state.tipo_selector),
-                 label_visibility="collapsed")
+# Header
+st.markdown("""
+<div class='header'>
+    <h1 style='margin:0'>✈️ METAR DIGITAL - SPJC</h1>
+    <p style='margin:0; opacity:0.9'>Aeropuerto Internacional Jorge Chávez | CORPAC Perú</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Layout principal
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    # Tipo de reporte
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.selectbox(
+            "Tipo de Reporte",
+            options=[t.value for t in TipoReporte],
+            key='tipo'
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # DÍA Y HORA
-    st.markdown("<div class='section-title'>FECHA Y HORA (UTC)</div>", unsafe_allow_html=True)
-    cc = st.columns(2)
-    with cc[0]:
-        st.text_input("Día", key='dia', placeholder="01-31")
-    with cc[1]:
-        st.text_input("Hora", key='hora', placeholder="HHMM")
+    # Fecha y hora
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        cols = st.columns(2)
+        with cols[0]:
+            st.text_input("Día", key='dia', value=datetime.now().strftime("%d"), placeholder="01-31")
+        with cols[1]:
+            st.text_input("Hora (UTC)", key='hora', value=datetime.now().strftime("%H%M"), placeholder="HHMM")
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # VIENTO
-    st.markdown("<div class='section-title'>VIENTO</div>", unsafe_allow_html=True)
-    cc = st.columns([2, 2, 1, 2, 2])
-    with cc[0]:
-        st.text_input("Dirección", key='dir_viento', placeholder="360")
-    with cc[1]:
-        st.text_input("Intensidad", key='int_viento', placeholder="15")
-    with cc[2]:
-        st.markdown("<br><b>-</b>", unsafe_allow_html=True)
-    with cc[3]:
-        st.text_input("Desde", key='var_desde', placeholder="340")
-    with cc[4]:
-        st.text_input("Hasta", key='var_hasta', placeholder="080")
+    # Viento
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.markdown("#### Viento")
+        cols = st.columns([2, 2, 1, 2, 2])
+        with cols[0]:
+            st.text_input("Dirección", key='dir_viento', placeholder="360")
+        with cols[1]:
+            st.text_input("Intensidad", key='int_viento', placeholder="15")
+        with cols[2]:
+            st.markdown("<br><b>-</b>", unsafe_allow_html=True)
+        with cols[3]:
+            st.text_input("Desde", key='var_desde', placeholder="340")
+        with cols[4]:
+            st.text_input("Hasta", key='var_hasta', placeholder="080")
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    var_viento = f"{st.session_state.get('var_desde','')}V{st.session_state.get('var_hasta','')}" if st.session_state.get('var_desde') and st.session_state.get('var_hasta') else ""
+    # Visibilidad
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.markdown("#### Visibilidad")
+        cols = st.columns(3)
+        with cols[0]:
+            st.text_input("Visibilidad", key='vis', placeholder="10km, 5000m, 9999")
+        with cols[1]:
+            st.text_input("Visibilidad Mínima", key='vis_min', placeholder="1200SW")
+        with cols[2]:
+            st.text_input("RVR", key='rvr', placeholder="R32/0400")
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # VISIBILIDAD
-    st.markdown("<div class='section-title'>VISIBILIDAD</div>", unsafe_allow_html=True)
-    cc = st.columns(3)
-    with cc[0]:
-        st.text_input("Visibilidad", key='vis', placeholder="10km, 5000m, 9999")
-    with cc[1]:
-        st.text_input("Visibilidad Mínima", key='vis_min', placeholder="1200SW")
-    with cc[2]:
-        st.text_input("RVR", key='rvr', placeholder="R32/0400")
+    # Fenómenos (fragment)
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        fragment_fenomenos()
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # FENÓMENOS
-    st.markdown("<div class='section-title'>FENÓMENOS</div>", unsafe_allow_html=True)
-    fragment_fenomenos()
-    fenomeno = " ".join([f.split(" - ")[0] for f in st.session_state.get('fenomenos_seleccionados', [])])
+    # Nubes (fragment)
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        fragment_nubes()
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # NUBES
-    st.markdown("<div class='section-title'>NUBOSIDAD</div>", unsafe_allow_html=True)
-    fragment_nubes()
-    nubes = convertir_nubes_a_metar()
+    # Temperatura y presión
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.markdown("#### Temperatura y Presión")
+        cols = st.columns(4)
+        with cols[0]:
+            st.text_input("Temp °C", key='temp', placeholder="-10/40")
+        with cols[1]:
+            st.text_input("Rocío °C", key='rocio', placeholder="≤ Temp")
+        with cols[2]:
+            st.text_input("QNH hPa", key='qnh', placeholder="850-1100")
+        with cols[3]:
+            st.text_input("Presión Est.", key='presion', placeholder="Opcional")
+        st.markdown("</div>", unsafe_allow_html=True)
     
-    # TEMPERATURA Y PRESIÓN
-    st.markdown("<div class='section-title'>TEMPERATURA Y PRESIÓN</div>", unsafe_allow_html=True)
-    cc = st.columns(4)
-    with cc[0]:
-        st.text_input("Temperatura °C", key='temp', placeholder="-10 a 40")
-    with cc[1]:
-        st.text_input("Punto de Rocío °C", key='rocio', placeholder="≤ Temp")
-    with cc[2]:
-        st.text_input("QNH hPa", key='qnh', placeholder="850-1100")
-    with cc[3]:
-        st.text_input("Presión Estación", key='presion', placeholder="Opcional")
-    
-    if st.session_state.temp and st.session_state.rocio:
-        try:
-            hr = calcular_hr_automatica(float(st.session_state.temp), float(st.session_state.rocio))
-            if hr:
-                st.caption(f"💧 HR calculada: {hr}%")
-        except:
-            pass
-    
-    # INFORMACIÓN SUPLEMENTARIA
-    st.markdown("<div class='section-title'>INFORMACIÓN SUPLEMENTARIA</div>", unsafe_allow_html=True)
-    st.text_input("##", key='suplementaria', placeholder="NOSIG, RMK CB AL NE, etc.", label_visibility="collapsed")
-    
-    # TN/TX (solo si corresponde la hora)
-    tn_tx_activo = mostrar_tn_tx()
-    
-    # PRECIPITACIÓN (siempre al final)
-    st.markdown("<div class='section-title'>PRECIPITACIÓN</div>", unsafe_allow_html=True)
-    pp_valor = st.selectbox("##", options=list(OPCIONES_PP.keys()), key="pp_select",
-                           format_func=lambda x: f"{x} - {OPCIONES_PP[x]}", label_visibility="collapsed")
-    
-    # BOTONES
-    st.markdown("---")
-    cc = st.columns(2)
-    with cc[0]:
-        generar = st.button("GENERAR METAR", use_container_width=True, type="primary")
-    with cc[1]:
-        limpiar = st.button("LIMPIAR CAMPOS", use_container_width=True)
-    
-    if limpiar:
-        limpiar_campos()
-    
-    if generar:
-        errores = []
-        if not pp_valor:
-            errores.append("Seleccione precipitación")
-        if tn_tx_activo and not st.session_state.get('tn_tx'):
-            errores.append("Complete TN/TX")
+    # ===== INFORMACIÓN SUPLEMENTARIA - DOS CAMPOS =====
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.markdown("#### Información Suplementaria")
         
-        if errores:
-            for e in errores:
-                st.error(f"❌ {e}")
-        else:
-            rmk = st.session_state.suplementaria
-            if pp_valor:
-                rmk = f"{pp_valor} {rmk}".strip()
-            if tn_tx_activo and st.session_state.get('tn_tx'):
-                rmk = f"{st.session_state.tn_tx} {rmk}".strip()
-            
+        st.markdown("**📋 Pronóstico / Texto fijo (VA ANTES de RMK):**")
+        pronostico = st.text_input(
+            "##", 
+            key="pronostico", 
+            placeholder="Ej: NOSIG, BECMG FM1200 9999 NSW, etc.",
+            label_visibility="collapsed"
+        )
+        st.markdown("<div class='info-box'>Este texto va ANTES de la palabra RMK</div>", unsafe_allow_html=True)
+        
+        st.markdown("**✏️ Texto libre del especialista (VA DESPUÉS de RMK):**")
+        texto_libre = st.text_input(
+            "##", 
+            key="texto_libre", 
+            placeholder="Ej: CB AL NE, TORRE VISUAL, etc.",
+            label_visibility="collapsed"
+        )
+        st.markdown("<div class='info-box'>Este texto va DESPUÉS de RMK y TN/TX</div>", unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # TN/TX según hora
+    hora_actual = int(datetime.now().strftime("%H%M"))
+    tn_tx_valor = None
+    
+    if 1200 <= hora_actual < 1300:
+        with st.container():
+            st.markdown("<div class='section'>", unsafe_allow_html=True)
+            st.markdown("#### 📉 TN (Temperatura Mínima 12Z)")
+            tn_valor = st.text_input("Valor TN °C", key="tn_valor", placeholder="Ej: 18.5")
+            if tn_valor:
+                tn_tx_valor = f"TN{tn_valor}/1200Z"
+            st.markdown("</div>", unsafe_allow_html=True)
+    elif 2200 <= hora_actual < 2300:
+        with st.container():
+            st.markdown("<div class='section'>", unsafe_allow_html=True)
+            st.markdown("#### 📈 TX (Temperatura Máxima 22Z)")
+            tx_valor = st.text_input("Valor TX °C", key="tx_valor", placeholder="Ej: 25.5")
+            if tx_valor:
+                tn_tx_valor = f"TX{tx_valor}/2200Z"
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Precipitación
+    with st.container():
+        st.markdown("<div class='section'>", unsafe_allow_html=True)
+        st.markdown("#### Precipitación (PP)")
+        pp = st.selectbox(
+            "##",
+            options=list(PRECIPITACION.keys()),
+            format_func=lambda x: f"{x} - {PRECIPITACION[x]}",
+            key="pp",
+            label_visibility="collapsed"
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Botón generar
+    col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
+    with col_b2:
+        if st.button("🎯 GENERAR METAR", use_container_width=True, type="primary"):
             datos = {
                 'tipo': st.session_state.tipo,
                 'dia': st.session_state.dia,
                 'hora': st.session_state.hora,
                 'dir_viento': st.session_state.dir_viento,
                 'int_viento': st.session_state.int_viento,
-                'var_viento': var_viento,
+                'var_desde': st.session_state.get('var_desde', ''),
+                'var_hasta': st.session_state.get('var_hasta', ''),
                 'vis': st.session_state.vis,
                 'vis_min': st.session_state.vis_min,
                 'rvr': st.session_state.rvr,
-                'fenomeno': fenomeno,
-                'nubes': nubes,
                 'temp': st.session_state.temp,
                 'rocio': st.session_state.rocio,
                 'qnh': st.session_state.qnh,
                 'presion': st.session_state.presion,
-                'suplementaria': rmk
+                'pronostico': st.session_state.pronostico,
+                'texto_libre': st.session_state.texto_libre,
+                'pp': pp,
+                'tn_tx': tn_tx_valor
             }
             
             resultado = generar_metar(datos)
             
             if resultado['success']:
-                accion = actualizar_o_insertar_registro(st.session_state.registros, resultado['registro'])
+                # Actualizar registros
+                hora_clave = f"{datos['dia']}_{datos['hora']}"
+                encontrado = False
+                for i, reg in enumerate(st.session_state.registros):
+                    if f"{reg.get('Día','')}_{reg.get('Hora','')}" == hora_clave:
+                        st.session_state.registros[i] = resultado['registro']
+                        encontrado = True
+                        break
+                
+                if not encontrado:
+                    st.session_state.registros.insert(0, resultado['registro'])
+                
+                # Guardar
+                guardar_registros(st.session_state.registros)
+                
+                # Actualizar historial
                 st.session_state.historial.insert(0, resultado['metar'])
-                st.session_state.historial = st.session_state.historial[:20]
-                st.session_state.contador = len(st.session_state.registros)
+                st.session_state.historial = st.session_state.historial[:15]
+                
+                # Guardar último para mostrar
                 st.session_state.ultimo_metar = resultado['metar']
                 
-                if accion == "actualizado":
-                    st.warning(f"🔄 Reporte de las {resultado['registro']['Hora']}Z ACTUALIZADO")
-                else:
-                    st.success(f"✅ Reporte de las {resultado['registro']['Hora']}Z AGREGADO")
+                st.success(f"✅ METAR generado correctamente ({datos['hora']}Z)")
                 st.rerun()
             else:
                 st.error(f"❌ {resultado['error']}")
 
-with col_der:
-    # ÚLTIMO REPORTE
-    st.markdown("<div class='section-title'>📋 ÚLTIMO REPORTE</div>", unsafe_allow_html=True)
+with col2:
+    # Último METAR
+    st.markdown("### 📋 Último METAR")
     if 'ultimo_metar' in st.session_state:
-        st.markdown(f"<div class='metar-box'>{st.session_state.ultimo_metar}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metar-display'>{st.session_state.ultimo_metar}</div>", unsafe_allow_html=True)
     else:
-        st.info("---")
+        st.info("No hay METAR generado")
     
-    # ESTADÍSTICAS
+    # Estadísticas
     st.markdown("---")
-    st.markdown("<div class='section-title'>📊 ESTADÍSTICAS</div>", unsafe_allow_html=True)
-    st.metric("REGISTROS EN MEMORIA", st.session_state.contador)
+    st.markdown("### 📊 Estadísticas")
+    st.metric("Registros del mes", len(st.session_state.registros))
     
-    # EXPORTAR
-    if st.button("📥 EXPORTAR EXCEL", use_container_width=True):
+    # Exportar
+    if st.button("📥 Exportar Excel", use_container_width=True):
         if st.session_state.registros:
-            archivo, mensaje = exportar_a_excel(st.session_state.registros)
-            if archivo:
+            guardar_registros(st.session_state.registros)
+            archivo = DATA_DIR / nombre_archivo_mes()
+            with open(archivo, 'rb') as f:
                 st.download_button(
-                    label="✅ DESCARGAR ARCHIVO",
-                    data=archivo,
-                    file_name=obtener_nombre_archivo_mensual(),
+                    label="✅ Descargar",
+                    data=f,
+                    file_name=nombre_archivo_mes(),
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-                st.success(mensaje)
-            else:
-                st.warning(mensaje)
         else:
-            st.warning("No hay registros para exportar")
+            st.warning("No hay datos")
     
-    # LIMPIAR MEMORIA
-    if st.button("🗑️ LIMPIAR MEMORIA", use_container_width=True):
+    # Limpiar memoria
+    if st.button("🗑️ Limpiar memoria", use_container_width=True):
         st.session_state.registros = []
         st.session_state.historial = []
-        st.session_state.contador = 0
         if 'ultimo_metar' in st.session_state:
             del st.session_state.ultimo_metar
         st.success("Memoria limpiada")
         st.rerun()
     
-    # HISTORIAL
+    # Historial
     st.markdown("---")
-    st.markdown("<div class='section-title'>📜 HISTORIAL</div>", unsafe_allow_html=True)
+    st.markdown("### 📜 Historial")
     if st.session_state.historial:
         for metar in st.session_state.historial[:8]:
-            clase = "historial-item-speci" if "SPECI" in metar else "historial-item"
-            st.markdown(f"<div class='{clase}'>{metar}</div>", unsafe_allow_html=True)
+            clase = "historial-item"
+            if "SPECI" in metar:
+                st.markdown(f"<div style='background:#FFE699; padding:0.8rem; margin-bottom:0.5rem; border-radius:5px; font-family:monospace; border-left:3px solid #FFC000;'>{metar}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div class='historial-item'>{metar}</div>", unsafe_allow_html=True)
     else:
-        st.info("No hay METARs en el historial")
+        st.info("Sin historial")
 
-# ============================================
-# FOOTER
-# ============================================
+# Footer
 st.markdown("---")
 st.markdown("""
-<div style='text-align:center; color:#666; padding:10px; font-size:0.8rem;'>
-    METAR Digital v17.0 - CORPAC Perú - Aeropuerto Internacional Jorge Chávez (SPJC)
+<div style='text-align:center; color:#666; padding:1rem; font-size:0.8rem;'>
+    METAR Digital - Sistema Profesional CORPAC Perú<br>
+    Aeropuerto Internacional Jorge Chávez (SPJC)<br>
+    Orden: [pronóstico] RMK [TN/TX] [texto libre] [PP] =
 </div>
 """, unsafe_allow_html=True)
