@@ -740,7 +740,7 @@ with col_izq:
     with cc[3]: st.text_input("Pres Est", key='presion', placeholder="Opc")
     
     # INFO SUPLEMENTARIA
-    st.markdown("<div class='section-title'>SUPLEMENTARIA</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>INFORMACION SUPLEMENTARIA</div>", unsafe_allow_html=True)
     st.text_input("##", key='suplementaria', placeholder="NOSIG RMK...", label_visibility="collapsed")
     
     # TN/TX (solo si aplica)
