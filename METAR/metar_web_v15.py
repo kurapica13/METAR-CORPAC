@@ -1406,7 +1406,7 @@ with col_izq:
         suplementaria = st.text_input(
             "Info suplementaria", 
             value=st.session_state.get('suplementaria_val', ''),
-            placeholder="Ej: PP000 NOSIG  o  PPTRZ TX15/ TN12/ NOSIG",
+            placeholder="NOSIG RMK PP000",
             help="Siempre incluir PPxxx. A las 12Z agregar TNxxx, a las 22Z agregar TXxxx",
             label_visibility="collapsed"
         )
